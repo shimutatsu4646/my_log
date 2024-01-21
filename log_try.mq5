@@ -29,7 +29,7 @@ MqlTradeResult result;
 
 int OnInit()
 {
-  Print("start ea");
+  Print("start ea (OnInit)");
   highOfRange = high;
   lowOfRange = low;
   currentDirectionOfBreakout = current_direction_of_breakout;
@@ -211,7 +211,7 @@ void send_order_both_stop_buy_and_stop_sell()
   //--- 操作パラメータの設定
   request.action = TRADE_ACTION_PENDING;
   request.symbol = Symbol();
-  request.volume = 0.1;
+  request.volume = 0.1; // TODO: ロスカットしたときの損失が証拠金の1%になるようにする
   request.deviation = 5;
   request.magic = expertMagic;
   double price;
@@ -226,10 +226,9 @@ void send_order_both_stop_buy_and_stop_sell()
   sl = lowOfRange - point;
   request.sl = NormalizeDouble(sl, digits); // ★チェック
   if(!OrderSend(request,result)){
-    PrintFormat("OrderSend error %d",GetLastError());
-    ResetLastError();
+    print_error_of_send_order("buy_stop");
   }
-  PrintFormat("retcode=%u  deal=%I64u  order=%I64u",result.retcode,result.deal,result.order);
+  print_information_of_send_error("buy_stop");
 
   // sell_stop //--- 操作パラメータの設定
   ZeroMemory(result); // requestは初期化せず使い回す
@@ -239,13 +238,12 @@ void send_order_both_stop_buy_and_stop_sell()
   sl = highOfRange + point;
   request.sl = NormalizeDouble(sl, digits); // ★チェック
   if(!OrderSend(request,result)){
-    PrintFormat("OrderSend error %d",GetLastError());
-    ResetLastError();
+    print_error_of_send_order("sell_stop");
   }
-  PrintFormat("retcode=%u  deal=%I64u  order=%I64u",result.retcode,result.deal,result.order);
+  print_information_of_send_error("sell_stop");
 }
 
-void update_all_stop_loss()
+void update_all_stop_loss() // TODO: 動作確認
 {
   ZeroMemory(request);
   ZeroMemory(result);
@@ -280,15 +278,16 @@ void update_all_stop_loss()
     } else if(type == POSITION_TYPE_SELL && currentDirectionOfBreakout == "below")  {
       sl = highOfRange + point;
       request.sl = NormalizeDouble(sl, digits);
+    } else {
+      Print("！！！update_all_stop_loss Error: ポジションのタイプとレンジブレイク方向が一致していない");
     }
     // request.tp = tp; // これはいらないはずだが、リクエストになければどうなるのか。。
     request.magic = expertMagic;
     //--- リクエストの送信
     if(!OrderSend(request,result)){
-      PrintFormat("OrderSend error %d",GetLastError());
-      ResetLastError();
+      print_error_of_send_order("update_all_stop_loss");
     }
-    PrintFormat("retcode=%u  deal=%I64u  order=%I64u",result.retcode,result.deal,result.order);
+    print_information_of_send_error("update_all_stop_loss");
   }
 }
 
@@ -309,18 +308,16 @@ void cancel_opposite_order()
     request.order = order_ticket;
     // 残留した未決注文をキャンセル
     if(!OrderSend(request,result)){
-      PrintFormat("OrderSend error %d", GetLastError());
-      ResetLastError(); // GetLastError()で_LastErrorの値が変更されているためリセット
+      print_error_of_send_order("cancel_opposite_order");
     }
-    PrintFormat("retcode=%u  deal=%I64u  order=%I64u",result.retcode,result.deal,result.order);
+    print_information_of_send_error("cancel_opposite_order");
   }
 
   // magic_number（適応されているペア）内に逆指値注文は１つだけのはず
     // 片方はポジションになったため
   if(same_magic_count > 1){
-    Print("★★★ロジック・エクスパートログの確認案件：");
-    Print("問題：レンジブレイクしたのに未決注文が2つ以上存在している");
-    Print("未決注文数:", total);
+    Print("！！！cancel_opposite_order Error：レンジブレイクしたのに未決注文が2つ以上存在している");
+    Print("未決注文数:", same_magic_count);
   }
 }
 
@@ -367,11 +364,21 @@ void close_opposite_positions()
     }
     // 決済
     if(!OrderSend(request,result)){
-      PrintFormat("OrderSend error %d",GetLastError()); // リクエストの送信に失敗した場合、エラーコードを出力
-      ResetLastError();
+      print_error_of_send_order("close_opposite_positions");
     }
-    PrintFormat("retcode=%u  deal=%I64u  order=%I64u",result.retcode,result.deal,result.order);
+    print_information_of_send_error("close_opposite_positions");
   }
+}
+
+void print_error_of_send_order(string function_name)
+{
+  PrintFormat("！！！OrderSend(%s) Error: %d", function_name, GetLastError()); // リクエストの送信に失敗した場合、エラーコードを出力
+  ResetLastError(); // GetLastError()で_LastErrorの値が変更されているためリセット
+}
+
+void print_information_of_send_error(string function_name)
+{
+  PrintFormat("OrderSend(%s): retcode=%u  deal=%I64u  order=%I64u", function_name, result.retcode, result.deal, result.order);
 }
 
 // int current_trend() // 中立：0、上昇トレンド：1、下降トレンド：-1

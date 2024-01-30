@@ -24,6 +24,7 @@ double lowOfRange; // 安値
 string currentDirectionOfBreakout;
 string previousDirectionOfBreakout;
 bool isInRange;
+int pyramidingCount;
 MqlTradeRequest request;
 MqlTradeResult result;
 
@@ -34,6 +35,7 @@ int OnInit()
   lowOfRange = low;
   currentDirectionOfBreakout = current_direction_of_breakout;
   previousDirectionOfBreakout = previous_direction_of_breakout;
+  pyramidingCount = 0;
   send_order_both_stop_buy_and_stop_sell();
   isInRange = true;
   return(INIT_SUCCEEDED);
@@ -52,12 +54,14 @@ void OnTick()
     // 前回のブレイク方向とは逆側にブレイクした場合
     if(previousDirectionOfBreakout != currentDirectionOfBreakout) {
       close_opposite_positions();
-      // 今格納されている値がそのまま、押し目安値or戻り高値になるためロジック不要
+      // 今格納されている値がそのまま、押し目安値or戻り高値になるため、押し目安値or戻り高値を更新するロジックは不要
+      pyramidingCount = 1;
     } else {
       // 上抜けの場合：押し目安値、 下抜けの場合：戻り高値 を導出し、grobal変数に格納
       find_and_save_turning_point();
       // ⑦：全てのポジションの損切り注文を更新する
       update_all_stop_loss();
+      pyramidingCount += 1;
     }
 
     isInRange = false; // レンジブレイクしたためレンジ内ではない
@@ -77,7 +81,12 @@ void OnTick()
   }
 }
 
-// ---------------------------------------------------------
+// ==============================================================================================
+// ==============================================================================================
+
+
+// ↓レンジ確認 =================================================================================
+
 
 // 値が格納されるglobal変数
     // previousDirectionOfBreakout
@@ -150,7 +159,7 @@ bool is_range_confirmed()
 }
 
 // 値が格納されるglobal変数
-    // 押し安値or戻り安値
+    // 押し安値or戻り高値
 void find_and_save_turning_point()
 {
   int index;
@@ -169,6 +178,7 @@ void find_and_save_turning_point()
 
 int count_bars_from_previous_peak_or_bottom()
 {
+  // TODO: データ型とかのせいで、小数点の値がズレたりしてるかも
   int index;
   bool is_not_found=true;
 
@@ -200,6 +210,9 @@ int count_bars_from_previous_peak_or_bottom()
   return index;
 }
 
+// ==============================================================================================
+// ↓逆指値注文 =================================================================================
+
 void send_order_both_stop_buy_and_stop_sell()
 {
   ZeroMemory(request);
@@ -211,13 +224,14 @@ void send_order_both_stop_buy_and_stop_sell()
   //--- 操作パラメータの設定
   request.action = TRADE_ACTION_PENDING;
   request.symbol = Symbol();
-  request.volume = 0.1; // TODO: ロスカットしたときの損失が証拠金の1%になるようにする
   request.deviation = 5;
   request.magic = expertMagic;
   double price;
   double sl;
   double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+  // double point = Point();
   int digits = SymbolInfoInteger(_Symbol, SYMBOL_DIGITS); // 小数点以下の桁数（精度）
+  // int digits = Digits();
 
   // buy_stop //--- 操作パラメータの設定
   request.type = ORDER_TYPE_BUY_STOP;
@@ -225,6 +239,7 @@ void send_order_both_stop_buy_and_stop_sell()
   request.price = NormalizeDouble(price, digits); // 正規化された発注価格
   sl = lowOfRange - point;
   request.sl = NormalizeDouble(sl, digits); // ★チェック
+  request.volume = volume_with_risk_manegemant();
   if(!OrderSend(request,result)){
     print_error_of_send_order("buy_stop");
   }
@@ -242,6 +257,9 @@ void send_order_both_stop_buy_and_stop_sell()
   }
   print_information_of_send_error("sell_stop");
 }
+
+// ==============================================================================================
+// ↓注文・ポジションの更新/キャンセル/決済 =====================================================
 
 void update_all_stop_loss() // TODO: 動作確認
 {
@@ -370,6 +388,9 @@ void close_opposite_positions()
   }
 }
 
+// ==============================================================================================
+// ↓Print共通化 ================================================================================
+
 void print_error_of_send_order(string function_name)
 {
   PrintFormat("！！！OrderSend(%s) Error: %d", function_name, GetLastError()); // リクエストの送信に失敗した場合、エラーコードを出力
@@ -381,64 +402,95 @@ void print_information_of_send_error(string function_name)
   PrintFormat("OrderSend(%s): retcode=%u  deal=%I64u  order=%I64u", function_name, result.retcode, result.deal, result.order);
 }
 
-// int current_trend() // 中立：0、上昇トレンド：1、下降トレンド：-1
-// {
-//   if(previousDirectionOfBreakout != currentDirectionOfBreakout){
-//     return 0;
-//   } else {
-//     if(currentDirectionOfBreakout == "above"){
-//       return 1;
-//     }else if(currentDirectionOfBreakout == "below"){
-//       return -1;
-//     }
-//   }
-// }
+// ==============================================================================================
+// ↓資産管理 ===================================================================================
 
-// トレンドの中にレンジがある（含まれている）。
-// 高値・安値→トレンド中に発生したレンジ内で一番高い高値・一番低い安値
-    // トレンド内の足と統合できる？から？
-// 上昇トレンド：
-  // 高値→高値更新が終わって、一番高い足の高値
-  // 安値→直前のレンジ内で一番低いところまで行った足の安値
-// 下降トレンド：
-  // 高値→直前のレンジ内で一番高いところまで行った足の高値
-  // 安値→安値更新が終わって、一番安い足の安値
-
-// 押し目安値は、上昇トレンド中に見られる一時的な価格の下落（押し目）の最低点を指します。
-    // →（上昇トレンド内で発生したレンジ内において最も低い価格）
-// 戻り高値は、下降トレンド中に見られる一時的な価格の上昇（戻り）の最高点を指します。
-    // →（下降トレンド内で発生したレンジ内において最も高い価格）
-
-// 上昇トレンドで、押し安値が更新された
-// →上昇トレンド終了。
-// しかしまだ下降トレンドでも無い
-// →高値が更新しないことが確定した瞬間(更に安値を更新す下降トレンドとなる。
-
-
-ENUM_ORDER_TYPE_FILLING FillPolicy()
+double volume_with_risk_manegemant() // TODO: JPYが絡むペア、絡まないペアで計算が異なるためロジック見直し & とりあえずvolumeの値をprintする。
 {
-  long fillType = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
-  if(fillType==SYMBOL_FILLING_IOC)return ORDER_FILLING_IOC;
-  else if(fillType==SYMBOL_FILLING_FOK)return ORDER_FILLING_FOK;
-  else return ORDER_FILLING_RETURN;
+  // 全体ロジック
+    // 損失額 / 証拠金 = rate(1%とか) / 100
+      // → 損失額 = 証拠金 * (rate / 100)
+    // 損失額 = 損失幅(point) * volume
+      // → volume = 損失額 / 損失幅
+    // ★ volume = 証拠金 * (rate / 100) / 損失幅
+
+  int digits = Digits();
+
+  // 証拠金に対する損失額の割合（X %）
+  // ピラミッディングの回数でrateを変える
+  double rate = rate_by_count_of_pyramiding();
+  // 証拠金;
+  double margin = AccountInfoDouble(ACCOUNT_BALANCE);
+  // 損失額
+  double loss_amount = margin * (rate / 100);
+  loss_amount = NormalizeDouble(loss_amount, digits);
+
+  double price = request.price;
+  double sl = request.sl;
+  // 損失幅（point） = price - sl => 絶対値
+  double loss_extent = MathAbs(price - sl);
+  loss_extent = NormalizeDouble(loss_extent, digits);
+  // ロット
+  double volume = loss_amount / loss_extent;
+  volume = verify_volume(volume);
+  return volume;
 }
 
-// 注文入れる際の考慮点：
+double verify_volume(double volume)
+{
+  double minVolume = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+	double maxVolume = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+	double stepVolume = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
 
-// 逆指値注文のpriceの設定や損切りの設定で、レンジを少し超えたところにしたい
-  // price,sl,tpの値を1ポイント増やすには、EUR/USDの場合、0.00001を加える（JPYペアの場合は0.001）。
-    // ↓この値(pointValue)をプラスしたりマイナスしたりする。
-    // double pointValue = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+	double tradeSize;
+	if(volume < minVolume){
+    tradeSize = minVolume;
+  } else if(volume > maxVolume) {
+    tradeSize = maxVolume;
+  } else {
+  // ブローカーが規定しているステップ幅に応じたロット数に修正
+  // 参照：https://mqlinvestmentlab.com/mql5lesson101/#toc18
+  // MathRoundは、引数の値を最も近い整数に丸める
+   tradeSize = MathRound(volume / stepVolume) * stepVolume;
+  }
 
-// スリッページ（価格偏差）
-  // 注文がリクエストされた価格と異なる価格で執行される現象を指し、
-  // 市場の高い変動性や流動性の低さによって引き起こされることがある
-  // request.deviation = 3; この場合、3ポイントのスリッページまで許容される。deviation＝（最大価格偏差）
-  // 逆指値だと、急速に市場が動いたときに最悪注文が執行されない可能性がある
-  // 気持ち広めに許容しておいて良さそう。
+  // 念のため再度ステップ幅に応じて正規化
+	if(stepVolume >= 0.1){
+    tradeSize = NormalizeDouble(tradeSize, 1);
+  } else {
+    tradeSize = NormalizeDouble(tradeSize, 2);
+  }
 
-//スプレッド
-  // 買値と売値の差であり、取引コストの一部と考えることができる。
-  // 特に短期取引やスキャルピング戦略を行う場合、スプレッドは利益に大きな影響を与える
-  // 逆指値注文であればある程度抑えられる
-  // コードで対策できることは特になく、ブローカーの選定（低スプレッドか）などが主な対応になる
+	return(tradeSize);
+}
+
+double rate_by_count_of_pyramiding() // doubleでいいのか？
+{
+  double rate;
+  switch (pyramidingCount)
+  {
+    case 0:
+      rate = 1.0;
+      break;
+    case 1:
+      rate = 0.85;
+      break;
+    case 2:
+      rate = 0.7;
+      break;
+    case 3:
+      rate = 0.55;
+      break;
+    case 4:
+      rate = 0.4;
+      break;
+    default:
+      rate = 0.25;
+      break;
+  }
+
+  return rate;
+}
+
+// ==============================================================================================
+// ==============================================================================================

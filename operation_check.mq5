@@ -23,10 +23,48 @@ void OnStart()
   // Print("stepVolume value: ", stepVolume);
 
   // int digits = SymbolInfoInteger(_Symbol, SYMBOL_DIGITS); // 小数点以下の桁数（精度）
-  int digits = Digits(); // 小数点以下の桁数（精度）
-  Print("digits: ", digits);
+  // int digits = Digits(); // 小数点以下の桁数（精度）
+  // Print("digits: ", digits);
 
-  double point = Point();
-  Print("point: ", point);
+  // double point = Point();
+  // Print("point: ", point);
+
+  // double amount_currency_of_one_lot = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+
+  // Print("amount_currency_of_one_lot: ", amount_currency_of_one_lot);
+  // double amount_currency_of_one_lot = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+
+  // Print("amount_currency_of_one_lot: ", amount_currency_of_one_lot);
+
+  // Print("Symbol(): ", Symbol());
+
+      // 対円ペアのシンボルを指定
+    // string symbol = "EURJPY"; // EUR対JPYの例
+
+    // // ティックデータを格納するための構造体
+    // MqlTick tick;
+
+    // // 最新のティックデータを取得
+    // if(SymbolInfoTick(symbol, tick))
+    // {
+    //     // ask価格とbid価格の平均を取得して対円レートとして使用
+    //     double rate = (tick.ask + tick.bid) / 2.0;
+        
+    //     // 結果を表示
+    //     Print("対円レート: ", rate);
+    // }
+    // else
+    // {
+    //     // データ取得に失敗した場合のエラーメッセージ
+    //     Print("対円レートの取得に失敗しました。");
+    // }
+
+
+  // string current_with_jpy;
+  // StringAdd(settlement_currency, "JPY");
+  int length = StringLen(_Symbol);
+  string settlement_currency = StringSubstr(_Symbol, 3, length - 3);
+
+  Print("settlement_currency: ", settlement_currency);
 
 }

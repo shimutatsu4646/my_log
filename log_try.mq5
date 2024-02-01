@@ -407,12 +407,16 @@ void print_information_of_send_error(string function_name)
 
 double volume_with_risk_manegemant() // TODO: JPYが絡むペア、絡まないペアで計算が異なるためロジック見直し & とりあえずvolumeの値をprintする。
 {
-  // 全体ロジック
-    // 損失額 / 証拠金 = rate(1%とか) / 100
-      // → 損失額 = 証拠金 * (rate / 100)
-    // 損失額 = 損失幅(point) * volume
-      // → volume = 損失額 / 損失幅
-    // ★ volume = 証拠金 * (rate / 100) / 損失幅
+  // ロット(volume)計算ロジック
+    // 許容損失額 / 証拠金 = rate(1%とか) / 100
+      // → 許容損失額 = 証拠金 * (rate / 100)
+    // 許容損失額 = 損失幅(値幅。1.5円とか0.01500ポンドとか) * ポジションサイズ（通貨数）
+      // 円を含む通貨ペアの場合↓
+        // → ポジションサイズ = 許容損失額 / 損失幅
+      // 円を含まない通貨ペアの場合↓
+        // → ポジションサイズ = 許容損失額 / 損失幅 / 決済通貨の対円レート（右側の通貨）
+  // ★ volume = ポジションサイズ / 1スタンダードロット（単位）
+
 
   int digits = Digits();
 
@@ -421,18 +425,60 @@ double volume_with_risk_manegemant() // TODO: JPYが絡むペア、絡まない�
   double rate = rate_by_count_of_pyramiding();
   // 証拠金;
   double margin = AccountInfoDouble(ACCOUNT_BALANCE);
-  // 損失額
+  // 許容損失額
   double loss_amount = margin * (rate / 100);
   loss_amount = NormalizeDouble(loss_amount, digits);
 
   double price = request.price;
   double sl = request.sl;
-  // 損失幅（point） = price - sl => 絶対値
+  // 損失幅（値幅） = price - sl => 絶対値
   double loss_extent = MathAbs(price - sl);
   loss_extent = NormalizeDouble(loss_extent, digits);
-  // ロット
-  double volume = loss_amount / loss_extent;
+  // ポジションサイズ
+  double position_size = loss_amount / loss_extent;
+
+  // 通貨ペアのうちの決済通貨を抽出
+  string symbol = Symbol();
+  // TODO: 別の関数にしてリファクタ
+  string settlement_currency;
+  int length = StringLen(symbol);
+  // 最初の3文字を取り除いて残りの文字列を取得
+  if(length > 3) {
+  // if(length == 6) { TODO: これのほうが安全では？
+      settlement_currency = StringSubstr(symbol, 3, length - 3);
+  } else {
+      // 元の文字列が3文字以下の場合は、空の文字列を返す
+      settlement_currency = "";
+  }
+
+  if (settlement_currency != "JPY") {
+    // 円を含まない通貨ペアの場合↓
+       // 決済通貨の対円レート（右側の通貨）で割る
+    string current_with_jpy = settlement_currency;
+    StringAdd(current_with_jpy, "JPY");
+
+    MqlTick tick;
+    double symbol_rate;
+    // 最新のティックデータを取得
+    if(SymbolInfoTick(current_with_jpy, tick)){
+        // ask価格とbid価格の平均を取得して対円レートとして使用
+        symbol_rate = (tick.ask + tick.bid) / 2.0;
+    }
+    else{
+      // データ取得に失敗した場合のエラーメッセージ
+      Print("対円レートの取得に失敗しました。");
+      // TODO: GetLastError();
+    }
+    position_size = position_size / symbol_rate;
+    // 整数に丸める（ほんとに必要？）
+    position_size = MathRound(position_size);
+    Print("position_size: ", position_size);
+  }
+
+  double amount_currency_of_one_lot = SymbolInfoDouble(symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+  double volume = position_size / amount_currency_of_one_lot;
   volume = verify_volume(volume);
+  Print("volume: ", volume);
   return volume;
 }
 

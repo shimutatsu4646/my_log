@@ -79,6 +79,13 @@ void OnTick()
     send_order_both_stop_buy_and_stop_sell();
     isInRange = true; // レンジが確定したためレンジ内である
   }
+
+  Print("[OnTick] [global] highOfRange:", highOfRange);
+  Print("[OnTick] [global] lowOfRange:", lowOfRange);
+  Print("[OnTick] [global] currentDirectionOfBreakout:", currentDirectionOfBreakout);
+  Print("[OnTick] [global] previousDirectionOfBreakout:", previousDirectionOfBreakout);
+  Print("[OnTick] [global] isInRange:", isInRange);
+  Print("[OnTick] pyramidingCount: ", pyramidingCount);
 }
 
 // ==============================================================================================
@@ -96,14 +103,20 @@ bool is_range_broken()
   // 一旦、レンジの幅を超えてたらレンジブレイク確定というロジックにする。
     // TODO: スリッページのせいで注文が執行されない問題が発生したら
     // →注文が執行されていたらレンジブレイク確定というロジックに変更する。
+
+  // ↓現在進行系の足の一個前ということ→確定済みの足（最新）
   double previous_high = iHigh(Symbol(),Period(), 1);
+  Print("[is_range_broken] previous_high: ", previous_high);
   double previous_low = iLow(Symbol(),Period(), 1);
+  Print("[is_range_broken] previous_low: ", previous_low);
   bool is_updated;
 
   if(previous_high > highOfRange){
     is_updated = true;
     previousDirectionOfBreakout = currentDirectionOfBreakout;
+    Print("[is_range_broken] previousDirectionOfBreakout <1><high>: ", previousDirectionOfBreakout);
     currentDirectionOfBreakout = "above";
+    Print("[is_range_broken] currentDirectionOfBreakout <1><high>: ", currentDirectionOfBreakout);
   } else {
     is_updated = false;
   }
@@ -113,12 +126,15 @@ bool is_range_broken()
     if(previous_low < lowOfRange){
       is_updated = true;
       previousDirectionOfBreakout = currentDirectionOfBreakout;
+      Print("[is_range_broken] previousDirectionOfBreakout <2><low>: ", previousDirectionOfBreakout);
       currentDirectionOfBreakout = "below";
+      Print("[is_range_broken] currentDirectionOfBreakout <2><low>: ", currentDirectionOfBreakout);
     } else {
       is_updated = false;
     }
   }
 
+  Print("[is_range_broken] is_updated: ", is_updated);
   return is_updated;
 }
 
@@ -127,6 +143,9 @@ bool is_range_broken()
     // 天井or底
 bool is_range_confirmed()
 {
+  // TODO: ロジック追加 Inside bar & Outside bar
+    // ↑ハラミ足の直前の足 or 抱き足 をgrobalに格納する必要ありそう。
+
   double previous_high;
   double second_last_high;
   double previous_low;
@@ -135,10 +154,14 @@ bool is_range_confirmed()
   if(currentDirectionOfBreakout == "above"){
     // 上抜け中の場合
     previous_high = iHigh(Symbol(),Period(), 1);
+    Print("[is_range_confirmed] previous_high: ", previous_high);
     second_last_high = iHigh(Symbol(),Period(), 2);
+    Print("[is_range_confirmed] second_last_high: ", second_last_high);
     if(previous_high < second_last_high){
       // 高値が更新されなかった
+      Print("[is_range_confirmed] highOfRange <1>: ", highOfRange);
       highOfRange = second_last_high;
+      Print("[is_range_confirmed] highOfRange <2>: ", highOfRange);
       is_confirmed = true;
     } else {
       is_confirmed = false;
@@ -146,15 +169,23 @@ bool is_range_confirmed()
   } else if(currentDirectionOfBreakout == "below"){
     // 下抜け中の場合
     previous_low = iLow(Symbol(),Period(), 1);
+    Print("[is_range_confirmed] previous_low: ", previous_low);
     second_last_low = iLow(Symbol(),Period(), 2);
+    Print("[is_range_confirmed] second_last_low: ", second_last_low);
     if(previous_low > second_last_low){
       // 安値が更新されなかった
+      Print("[is_range_confirmed] lowOfRange <1>: ", lowOfRange);
       lowOfRange = second_last_low;
+      Print("[is_range_confirmed] lowOfRange <2>: ", lowOfRange);
       is_confirmed = true;
     } else {
       is_confirmed = false;
     }
+  } else {
+    Print("ERROR!! [is_range_confirmed] currentDirectionOfBreakout: ", currentDirectionOfBreakout);
   }
+
+  Print("[is_range_confirmed] is_confirmed: ", is_confirmed);
   return is_confirmed;
 }
 
@@ -162,17 +193,28 @@ bool is_range_confirmed()
     // 押し安値or戻り高値
 void find_and_save_turning_point()
 {
+  // ENHANCE: 前回のpeak・bottomをglobalで扱う
   int index;
   int previous_peak_index;
   int previous_bottom_index;
   if(currentDirectionOfBreakout == "above"){
     previous_peak_index = count_bars_from_previous_peak_or_bottom();
+    Print("[find_and_save_turning_point] previous_peak_index: ", previous_peak_index);
     index = iLowest(Symbol(), Period(), MODE_LOW, previous_peak_index, 1);
+    Print("[find_and_save_turning_point] index: ", index);
+    Print("[find_and_save_turning_point] lowOfRange <1>: ", lowOfRange);
     lowOfRange = iLow(Symbol(),Period(), index + 1);
-  } else {
+    Print("[find_and_save_turning_point] lowOfRange <2>: ", lowOfRange);
+  } else if(currentDirectionOfBreakout == "below") {
     previous_bottom_index = count_bars_from_previous_peak_or_bottom();
+    Print("[find_and_save_turning_point] previous_bottom_index: ", previous_bottom_index);
     index = iHighest(Symbol(), Period(), MODE_HIGH, previous_bottom_index, 1);
+    Print("[find_and_save_turning_point] index: ", index);
+    Print("[find_and_save_turning_point] highOfRange <1>: ", highOfRange);
     highOfRange = iHigh(Symbol(),Period(), index + 1);
+    Print("[find_and_save_turning_point] highOfRange <2>: ", highOfRange);
+  } else {
+    Print("ERROR!! [find_and_save_turning_point] currentDirectionOfBreakout: ", currentDirectionOfBreakout);
   }
 }
 
@@ -180,33 +222,49 @@ int count_bars_from_previous_peak_or_bottom()
 {
   // TODO: データ型とかのせいで、小数点の値がズレたりしてるかも
   int index;
-  bool is_not_found=true;
+  bool is_not_found = true;
 
   if(currentDirectionOfBreakout == "above"){
-    // 天井までの足の数
+    // 天井までの足の数を導き出す
     double high;
     // 直前の確定済み足から始める→ i = 1;
     for(int i = 1; is_not_found; i++)
     {
-      high = iHigh(Symbol(),Period(), index);
-      if(high == highOfRange){
+      high = iHigh(Symbol(),Period(), i);
+      if(high == highOfRange){ // TODO: highを正規化とかしてないなら一致しないんじゃね？→無限ループになりそう
         index = i;
         is_not_found = false;
+        Print("[count_bars_from_previous_peak_or_bottom] index <1><high>: ", index);
+      }
+      if (i == 300) {
+        Print("INFINITE LOOP!? [count_bars_from_previous_peak_or_bottom] <1><high>");
+        break;
       }
     }
-  } else {
-    // 底までの足の数
+    Print("[count_bars_from_previous_peak_or_bottom] high: ", high);
+  } else if(currentDirectionOfBreakout == "below") {
+    // 底までの足の数を導き出す
     double low;
     // 直前の確定済み足から始める→ i = 1;
     for(int i = 1; is_not_found; i++)
     {
-      low = iLow(Symbol(),Period(), index);
-      if(low== lowOfRange){
+      low = iLow(Symbol(),Period(), i);
+      if(low == lowOfRange){ // TODO: lowを正規化とかしてないなら一致しないんじゃね？→無限ループになりそう
         index = i;
         is_not_found = false;
+        Print("[count_bars_from_previous_peak_or_bottom] index <2><low>: ", index);
+      }
+      if (i == 300) {
+        Print("INFINITE LOOP!? [count_bars_from_previous_peak_or_bottom] <2><low>");
+        break;
       }
     }
+    Print("[count_bars_from_previous_peak_or_bottom] low: ", low);
+  } else {
+    Print("ERROR!! [count_bars_from_previous_peak_or_bottom] currentDirectionOfBreakout: ", currentDirectionOfBreakout);
   }
+
+  // TODO: indexの値がおかしかったらエラー制御
   return index;
 }
 
@@ -228,18 +286,23 @@ void send_order_both_stop_buy_and_stop_sell()
   request.magic = expertMagic;
   double price;
   double sl;
-  double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-  // double point = Point();
-  int digits = SymbolInfoInteger(_Symbol, SYMBOL_DIGITS); // 小数点以下の桁数（精度）
-  // int digits = Digits();
+  double point = Point();
+  Print("[send_order_both_stop_buy_and_stop_sell] point: ", point);
+  int digits = Digits(); // 小数点以下の桁数（精度）
+  Print("[send_order_both_stop_buy_and_stop_sell] digits: ", digits);
 
   // buy_stop //--- 操作パラメータの設定
   request.type = ORDER_TYPE_BUY_STOP;
   price = highOfRange + point;
+  Print("[send_order_both_stop_buy_and_stop_sell] price <1> <buy_stop>: ", price);
   request.price = NormalizeDouble(price, digits); // 正規化された発注価格
+  Print("[send_order_both_stop_buy_and_stop_sell] request.price <1> <buy_stop>: ", request.price);
   sl = lowOfRange - point;
-  request.sl = NormalizeDouble(sl, digits); // ★チェック
+  Print("[send_order_both_stop_buy_and_stop_sell] sl <1> <buy_stop>: ", sl);
+  request.sl = NormalizeDouble(sl, digits); // 正規化された損切り価格
+  Print("[send_order_both_stop_buy_and_stop_sell] request.sl <1> <buy_stop>: ", request.sl);
   request.volume = volume_with_risk_manegemant();
+  Print("[send_order_both_stop_buy_and_stop_sell] request.volume <1> <buy_stop>: ", request.volume);
   if(!OrderSend(request,result)){
     print_error_of_send_order("buy_stop");
   }
@@ -249,9 +312,13 @@ void send_order_both_stop_buy_and_stop_sell()
   ZeroMemory(result); // requestは初期化せず使い回す
   request.type = ORDER_TYPE_SELL_STOP;
   price = lowOfRange - point;
+  Print("[send_order_both_stop_buy_and_stop_sell] price <2> <sell_stop>: ", price);
   request.price = NormalizeDouble(price, digits); // 正規化された発注価格
+  Print("[send_order_both_stop_buy_and_stop_sell] request.price <2> <sell_stop>: ", request.price);
   sl = highOfRange + point;
-  request.sl = NormalizeDouble(sl, digits); // ★チェック
+  Print("[send_order_both_stop_buy_and_stop_sell] sl <2> <sell_stop>: ", sl);
+  request.sl = NormalizeDouble(sl, digits); // 正規化された損切り価格
+  Print("[send_order_both_stop_buy_and_stop_sell] request.sl <2> <sell_stop>: ", request.sl);
   if(!OrderSend(request,result)){
     print_error_of_send_order("sell_stop");
   }
@@ -269,18 +336,26 @@ void update_all_stop_loss() // TODO: 動作確認
     // sl→上抜けの場合：押し目安値、 下抜けの場合：戻り高値  に更新する
     // →currentDirectionOfBreakoutの値に合わせてlow_・high_のどちらの値をslにするかを変える
 
-  int total=PositionsTotal();
-  for(int i=0; i<total; i++)
+  int total = PositionsTotal();
+  Print("[update_all_stop_loss] total: ", total);
+  for(int i = total - 1; i >= 0; i--)
   {
+    Print("[update_all_stop_loss] (loop index) i: ", i);
     ulong position_ticket = PositionGetTicket(i);
+    Print("[update_all_stop_loss] position_ticket: ", position_ticket);
     ulong magic = PositionGetInteger(POSITION_MAGIC); // ポジションのMagicNumber
+    Print("[update_all_stop_loss] magic: ", magic);
     if(magic != expertMagic) continue; // MagicNumberが一致していない場合スキップ
 
     string position_symbol = PositionGetString(POSITION_SYMBOL);
+    Print("[update_all_stop_loss] position_symbol: ", position_symbol);
     double sl;
-    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT); // positionのsymbolにしてないけど、magicチェックしてるし平気でしょ
+    double point = SymbolInfoDouble(position_symbol, SYMBOL_POINT); // positionのsymbolにしてないけど、magicチェックしてるし平気でしょ
+    Print("[update_all_stop_loss] point: ", point);
     int digits = (int)SymbolInfoInteger(position_symbol, SYMBOL_DIGITS); // 小数点以下の桁数
+    Print("[update_all_stop_loss] digits: ", digits);
     ENUM_POSITION_TYPE type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE); // ポジションタイプ
+    Print("[update_all_stop_loss] type: ", type);
 
     ZeroMemory(request);
     ZeroMemory(result);
@@ -288,19 +363,24 @@ void update_all_stop_loss() // TODO: 動作確認
     request.action = TRADE_ACTION_SLTP;
     request.position = position_ticket;
     request.symbol = position_symbol;
+    request.magic = magic;
+    // request.tp = tp; // これはいらないはずだが、リクエストになければどうなるのか。。
 
     if(type == POSITION_TYPE_BUY && currentDirectionOfBreakout == "above") // 一致するはず
     {
       sl = lowOfRange - point;
+      Print("[update_all_stop_loss] sl <1> <buy>: ", sl);
       request.sl = NormalizeDouble(sl, digits);
+      Print("[update_all_stop_loss] request.sl <1> <buy>: ", request.sl);
     } else if(type == POSITION_TYPE_SELL && currentDirectionOfBreakout == "below")  {
       sl = highOfRange + point;
+      Print("[update_all_stop_loss] sl <2> <sell>: ", sl);
       request.sl = NormalizeDouble(sl, digits);
+      Print("[update_all_stop_loss] request.sl <2> <sell>: ", request.sl);
     } else {
-      Print("！！！update_all_stop_loss Error: ポジションのタイプとレンジブレイク方向が一致していない");
+      Print("ERROR!! [update_all_stop_loss] : ポジションのタイプとレンジブレイク方向が一致していない");
     }
-    // request.tp = tp; // これはいらないはずだが、リクエストになければどうなるのか。。
-    request.magic = expertMagic;
+
     //--- リクエストの送信
     if(!OrderSend(request,result)){
       print_error_of_send_order("update_all_stop_loss");
@@ -313,10 +393,14 @@ void cancel_opposite_order()
 {
   int same_magic_count = 0;
   int total = OrdersTotal(); // ←未決注文しか取得しない
+  Print("[cancel_opposite_order] total: ", total);
   for(int i = total - 1; i >= 0; i--)
   {
+    Print("[cancel_opposite_order] (loop index) i: ", i);
     ulong order_ticket = OrderGetTicket(i);
+    Print("[cancel_opposite_order] order_ticket: ", order_ticket);
     ulong magic = OrderGetInteger(ORDER_MAGIC);
+    Print("[cancel_opposite_order] magic: ", magic);
     if(magic!=expertMagic) continue; // MagicNumberが一致していない場合スキップ
 
     same_magic_count++;
@@ -324,6 +408,7 @@ void cancel_opposite_order()
     ZeroMemory(result);
     request.action = TRADE_ACTION_REMOVE;
     request.order = order_ticket;
+    Print("[cancel_opposite_order] request.order: ", request.order);
     // 残留した未決注文をキャンセル
     if(!OrderSend(request,result)){
       print_error_of_send_order("cancel_opposite_order");
@@ -334,8 +419,8 @@ void cancel_opposite_order()
   // magic_number（適応されているペア）内に逆指値注文は１つだけのはず
     // 片方はポジションになったため
   if(same_magic_count > 1){
-    Print("！！！cancel_opposite_order Error：レンジブレイクしたのに未決注文が2つ以上存在している");
-    Print("未決注文数:", same_magic_count);
+    Print("Error!! [cancel_opposite_order]: レンジブレイクしたのに未決注文が2つ以上存在している");
+    Print("[cancel_opposite_order] 未決注文数: ", same_magic_count);
   }
 }
 
@@ -344,25 +429,34 @@ void close_opposite_positions()
   ENUM_POSITION_TYPE type_of_position_closing;
   if(previousDirectionOfBreakout == "above")
   {
-    type_of_position_closing = POSITION_TYPE_BUY;
+    type_of_position_closing = POSITION_TYPE_SELL;
   } else if(previousDirectionOfBreakout == "below")
   {
-    type_of_position_closing = POSITION_TYPE_SELL;
+    type_of_position_closing = POSITION_TYPE_BUY;
+  } else {
+    Print("ERROR!! [close_opposite_positions] previousDirectionOfBreakout: ", previousDirectionOfBreakout);
   }
+  Print("[close_opposite_positions] type_of_position_closing: ", type_of_position_closing);
 
   int total = PositionsTotal();
+  Print("[close_opposite_positions] total: ", total);
   for(int i = total - 1; i >= 0; i--)
   {
+    Print("[close_opposite_positions] (loop index) i: ", i);
     ulong position_ticket = PositionGetTicket(i);
+    Print("[close_opposite_positions] position_ticket: ", position_ticket);
     ulong magic = PositionGetInteger(POSITION_MAGIC);
+    Print("[update_all_stop_loss] magic: ", magic);
     if(magic != expertMagic) continue; // MagicNumberが一致していない場合スキップ
 
     ENUM_POSITION_TYPE type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+    Print("[update_all_stop_loss] type: ", type);
     if(type != type_of_position_closing) continue; // type一致しない場合、削除対象のポジションではないためスキップ
 
     string position_symbol = PositionGetString(POSITION_SYMBOL);
-    int digits = (int)SymbolInfoInteger(position_symbol, SYMBOL_DIGITS);
+    Print("[close_opposite_positions] position_symbol: ", position_symbol);
     double volume = PositionGetDouble(POSITION_VOLUME);
+    Print("[close_opposite_positions] volume: ", volume);
     ZeroMemory(request);
     ZeroMemory(result);
     request.action = TRADE_ACTION_DEAL;
@@ -374,11 +468,13 @@ void close_opposite_positions()
     //--- ポジションタイプによる注文タイプと価格の設定
     if(type == POSITION_TYPE_BUY)
     {
-      request.price=SymbolInfoDouble(position_symbol,SYMBOL_BID);
-      request.type =ORDER_TYPE_SELL;
+      request.price = SymbolInfoDouble(position_symbol, SYMBOL_BID);
+      Print("[close_opposite_positions] request.price <1>: ", request.price);
+      request.type = ORDER_TYPE_SELL;
     } else {
-      request.price=SymbolInfoDouble(position_symbol,SYMBOL_ASK);
-      request.type =ORDER_TYPE_BUY;
+      request.price = SymbolInfoDouble(position_symbol, SYMBOL_ASK);
+      Print("[close_opposite_positions] request.price <2>: ", request.price);
+      request.type = ORDER_TYPE_BUY;
     }
     // 決済
     if(!OrderSend(request,result)){
@@ -419,74 +515,96 @@ double volume_with_risk_manegemant() // TODO: JPYが絡むペア、絡まない�
 
 
   int digits = Digits();
-
+  Print("[volume_with_risk_manegemant] digits: ", digits);
   // 証拠金に対する損失額の割合（X %）
   // ピラミッディングの回数でrateを変える
   double rate = rate_by_count_of_pyramiding();
+  Print("[volume_with_risk_manegemant] rate: ", rate);
   // 証拠金;
   double margin = AccountInfoDouble(ACCOUNT_BALANCE);
+  Print("[volume_with_risk_manegemant] margin: ", margin);
   // 許容損失額
   double loss_amount = margin * (rate / 100);
+  Print("[volume_with_risk_manegemant] loss_amount <1>: ", loss_amount);
   loss_amount = NormalizeDouble(loss_amount, digits);
+  Print("[volume_with_risk_manegemant] loss_amount <2>: ", loss_amount);
 
   double price = request.price;
+  Print("[volume_with_risk_manegemant] price: ", price);
   double sl = request.sl;
+  Print("[volume_with_risk_manegemant] sl: ", sl);
   // 損失幅（値幅） = price - sl => 絶対値
   double loss_extent = MathAbs(price - sl);
+  Print("[volume_with_risk_manegemant] loss_extent <1>: ", loss_extent);
   loss_extent = NormalizeDouble(loss_extent, digits);
+  Print("[volume_with_risk_manegemant] loss_extent <2>: ", loss_extent);
   // ポジションサイズ
   double position_size = loss_amount / loss_extent;
+  Print("[volume_with_risk_manegemant] position_size <1>: ", position_size);
 
   // 通貨ペアのうちの決済通貨を抽出
   string symbol = Symbol();
   // TODO: 別の関数にしてリファクタ
   string settlement_currency;
   int length = StringLen(symbol);
-  // 最初の3文字を取り除いて残りの文字列を取得
+  Print("[volume_with_risk_manegemant] length: ", length);
   if(length > 3) {
-  // if(length == 6) { TODO: これのほうが安全では？
-      settlement_currency = StringSubstr(symbol, 3, length - 3);
+  // if(length == 6) { // こっちのほうが良さそう
+    // 最初の3文字を取り除いて残りの文字列を取得
+    settlement_currency = StringSubstr(symbol, 3, length - 3);
   } else {
-      // 元の文字列が3文字以下の場合は、空の文字列を返す
-      settlement_currency = "";
+    // 元の文字列が3文字以下の場合は、空の文字列を返す
+    settlement_currency = "";
   }
+  Print("[volume_with_risk_manegemant] settlement_currency: ", settlement_currency);
 
   if (settlement_currency != "JPY") {
     // 円を含まない通貨ペアの場合↓
        // 決済通貨の対円レート（右側の通貨）で割る
     string current_with_jpy = settlement_currency;
+    Print("[volume_with_risk_manegemant] current_with_jpy <1>: ", current_with_jpy);
     StringAdd(current_with_jpy, "JPY");
+    Print("[volume_with_risk_manegemant] current_with_jpy <2>: ", current_with_jpy);
 
     MqlTick tick;
     double symbol_rate;
     // 最新のティックデータを取得
     if(SymbolInfoTick(current_with_jpy, tick)){
-        // ask価格とbid価格の平均を取得して対円レートとして使用
-        symbol_rate = (tick.ask + tick.bid) / 2.0;
+      // ask価格とbid価格の平均を取得して対円レートとして使用
+      symbol_rate = (tick.ask + tick.bid) / 2.0;
+      Print("[volume_with_risk_manegemant] symbol_rate: ", symbol_rate);
+      position_size = position_size / symbol_rate;
+      Print("[volume_with_risk_manegemant] position_size <2>: ", position_size);
     }
     else{
       // データ取得に失敗した場合のエラーメッセージ
-      Print("対円レートの取得に失敗しました。");
+      Print("[volume_with_risk_manegemant] 対円レートの取得に失敗しました。");
       // TODO: GetLastError();
     }
-    position_size = position_size / symbol_rate;
     // 整数に丸める（ほんとに必要？）
     position_size = MathRound(position_size);
-    Print("position_size: ", position_size);
+    Print("[volume_with_risk_manegemant] position_size <3>: ", position_size);
   }
 
   double amount_currency_of_one_lot = SymbolInfoDouble(symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+  Print("[volume_with_risk_manegemant] amount_currency_of_one_lot: ", amount_currency_of_one_lot);
   double volume = position_size / amount_currency_of_one_lot;
+  Print("[volume_with_risk_manegemant] volume <1>: ", volume);
   volume = verify_volume(volume);
-  Print("volume: ", volume);
+  Print("[volume_with_risk_manegemant] volume <2>: ", volume);
   return volume;
 }
 
 double verify_volume(double volume)
 {
+  Print("[verify_volume] volume: ", volume);
+
   double minVolume = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+  Print("[verify_volume] minVolume: ", minVolume);
 	double maxVolume = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+  Print("[verify_volume] maxVolume: ", maxVolume);
 	double stepVolume = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+  Print("[verify_volume] stepVolume: ", stepVolume);
 
 	double tradeSize;
 	if(volume < minVolume){
@@ -499,6 +617,7 @@ double verify_volume(double volume)
   // MathRoundは、引数の値を最も近い整数に丸める
    tradeSize = MathRound(volume / stepVolume) * stepVolume;
   }
+  Print("[verify_volume] tradeSize <1>: ", tradeSize);
 
   // 念のため再度ステップ幅に応じて正規化
 	if(stepVolume >= 0.1){
@@ -506,6 +625,7 @@ double verify_volume(double volume)
   } else {
     tradeSize = NormalizeDouble(tradeSize, 2);
   }
+  Print("[verify_volume] tradeSize <2>: ", tradeSize);
 
 	return(tradeSize);
 }
@@ -513,6 +633,7 @@ double verify_volume(double volume)
 double rate_by_count_of_pyramiding() // doubleでいいのか？
 {
   double rate;
+  Print("[verify_volume] pyramidingCount: ", pyramidingCount);
   switch (pyramidingCount)
   {
     case 0:

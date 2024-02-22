@@ -25,6 +25,8 @@ string currentDirectionOfBreakout;
 string previousDirectionOfBreakout;
 bool isInRange;
 int pyramidingCount;
+double comparative_high; // ブレイク中の比較対象の足の高値
+double comparative_low; // ブレイク中の比較対象の足の安値
 MqlTradeRequest request;
 MqlTradeResult result;
 
@@ -38,6 +40,8 @@ int OnInit()
   pyramidingCount = 0;
   send_order_both_stop_buy_and_stop_sell();
   isInRange = true;
+  comparative_high = 0.0;
+  comparative_low = 0.0;
   return(INIT_SUCCEEDED);
 }
 
@@ -65,7 +69,6 @@ void OnTick()
     }
 
     isInRange = false; // レンジブレイクしたためレンジ内ではない
-    return; // このタイミングでは高値・安値が確定していない（④）
   }
 
   if(!isInRange){
@@ -98,6 +101,8 @@ void OnTick()
 // 値が格納されるglobal変数
     // previousDirectionOfBreakout
     // currentDirectionOfBreakout
+    // comparative_high
+    // comparative_low
 bool is_range_broken()
 {
   // 一旦、レンジの幅を超えてたらレンジブレイク確定というロジックにする。
@@ -114,9 +119,13 @@ bool is_range_broken()
   if(previous_high > highOfRange){
     is_updated = true;
     previousDirectionOfBreakout = currentDirectionOfBreakout;
-    Print("[is_range_broken] previousDirectionOfBreakout <1><high>: ", previousDirectionOfBreakout);
+    Print("[is_range_broken] previousDirectionOfBreakout <above>: ", previousDirectionOfBreakout);
     currentDirectionOfBreakout = "above";
-    Print("[is_range_broken] currentDirectionOfBreakout <1><high>: ", currentDirectionOfBreakout);
+    Print("[is_range_broken] currentDirectionOfBreakout <above>: ", currentDirectionOfBreakout);
+    comparative_high = previous_high;
+    Print("[is_range_broken] comparative_high <above>: ", comparative_high);
+    comparative_low = previous_low;
+    Print("[is_range_broken] comparative_low <above>: ", comparative_low);
   } else {
     is_updated = false;
   }
@@ -126,9 +135,13 @@ bool is_range_broken()
     if(previous_low < lowOfRange){
       is_updated = true;
       previousDirectionOfBreakout = currentDirectionOfBreakout;
-      Print("[is_range_broken] previousDirectionOfBreakout <2><low>: ", previousDirectionOfBreakout);
+      Print("[is_range_broken] previousDirectionOfBreakout <below>: ", previousDirectionOfBreakout);
       currentDirectionOfBreakout = "below";
-      Print("[is_range_broken] currentDirectionOfBreakout <2><low>: ", currentDirectionOfBreakout);
+      Print("[is_range_broken] currentDirectionOfBreakout <below>: ", currentDirectionOfBreakout);
+      comparative_high = previous_high;
+      Print("[is_range_broken] comparative_high <below>: ", comparative_high);
+      comparative_low = previous_low;
+      Print("[is_range_broken] comparative_low <below>: ", comparative_low);
     } else {
       is_updated = false;
     }
@@ -143,42 +156,69 @@ bool is_range_broken()
     // 天井or底
 bool is_range_confirmed()
 {
-  // TODO: ロジック追加 Inside bar & Outside bar
-    // ↑ハラミ足の直前の足 or 抱き足 をgrobalに格納する必要ありそう。
-
   double previous_high;
-  double second_last_high;
   double previous_low;
-  double second_last_low;
   bool is_confirmed;
+  // 最新の確定した足
+  previous_high = iHigh(Symbol(),Period(), 1);
+  previous_low = iLow(Symbol(),Period(), 1);
+  Print("[is_range_confirmed] previous_high: ", previous_high);
+  Print("[is_range_confirmed] previous_low: ", previous_low);
+  Print("[is_range_confirmed] comparative_high: ", comparative_high);
+  Print("[is_range_confirmed] comparative_low: ", comparative_low);
+
   if(currentDirectionOfBreakout == "above"){
     // 上抜け中の場合
-    previous_high = iHigh(Symbol(),Period(), 1);
-    Print("[is_range_confirmed] previous_high: ", previous_high);
-    second_last_high = iHigh(Symbol(),Period(), 2);
-    Print("[is_range_confirmed] second_last_high: ", second_last_high);
-    if(previous_high < second_last_high){
-      // 高値が更新されなかった
-      Print("[is_range_confirmed] highOfRange <1>: ", highOfRange);
-      highOfRange = second_last_high;
-      Print("[is_range_confirmed] highOfRange <2>: ", highOfRange);
-      is_confirmed = true;
+    if(previous_high <= comparative_high){
+      // 高値が更新されなかった場合
+
+      if (previous_low >= comparative_low) {
+        // ハラミ足だった場合
+        is_confirmed = false;
+      } else {
+        // レンジ確定
+        Print("[is_range_confirmed] highOfRange <above><before>: ", highOfRange);
+        highOfRange = comparative_high;
+        Print("[is_range_confirmed] highOfRange <above><after>: ", highOfRange);
+        is_confirmed = true;
+        comparative_high = 0.0;
+        comparative_low = 0.0;
+        Print("[is_range_confirmed] comparative_high <above><1>: ", comparative_high);
+        Print("[is_range_confirmed] comparative_low <above><1>: ", comparative_low);
+      }
     } else {
+      // 高値を更新した場合
+      comparative_high = previous_high;
+      comparative_low = previous_low;
+      Print("[is_range_confirmed] comparative_high <above><2>: ", comparative_high);
+      Print("[is_range_confirmed] comparative_low <above><2>: ", comparative_low);
       is_confirmed = false;
     }
   } else if(currentDirectionOfBreakout == "below"){
     // 下抜け中の場合
-    previous_low = iLow(Symbol(),Period(), 1);
-    Print("[is_range_confirmed] previous_low: ", previous_low);
-    second_last_low = iLow(Symbol(),Period(), 2);
-    Print("[is_range_confirmed] second_last_low: ", second_last_low);
-    if(previous_low > second_last_low){
-      // 安値が更新されなかった
-      Print("[is_range_confirmed] lowOfRange <1>: ", lowOfRange);
-      lowOfRange = second_last_low;
-      Print("[is_range_confirmed] lowOfRange <2>: ", lowOfRange);
-      is_confirmed = true;
+    if(previous_low >= comparative_low){
+      // 安値が更新されなかった場合
+
+      if (previous_high <= comparative_high) {
+        // ハラミ足だった場合
+        is_confirmed = false;
+      } else {
+        // レンジ確定
+        Print("[is_range_confirmed] lowOfRange <below><before>: ", lowOfRange);
+        lowOfRange = comparative_low;
+        Print("[is_range_confirmed] lowOfRange <below><after>: ", lowOfRange);
+        is_confirmed = true;
+        comparative_low = 0.0;
+        comparative_high = 0.0;
+        Print("[is_range_confirmed] comparative_low <below><1>: ", comparative_low);
+        Print("[is_range_confirmed] comparative_high <below><1>: ", comparative_high);
+      }
     } else {
+      // 安値を更新した場合
+      comparative_low = previous_low;
+      comparative_high = previous_high;
+      Print("[is_range_confirmed] comparative_low <below><2>: ", comparative_low);
+      Print("[is_range_confirmed] comparative_high <below><2>: ", comparative_high);
       is_confirmed = false;
     }
   } else {

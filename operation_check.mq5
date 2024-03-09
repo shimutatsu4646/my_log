@@ -10,11 +10,24 @@
 
 int OnInit()
 {
+  datetime zeroBarTime = iTime(_Symbol, PERIOD_M1, 0);
+  datetime oneBarTime = iTime(_Symbol, PERIOD_M1, 1);
+  Print("zeroBarTime: ", zeroBarTime);
+  // → zeroBarTime: 2024.02.28 15:43:00
+  Print("oneBarTime: ", oneBarTime);
+  // →oneBarTime: 2024.02.28 15:42:00
+  datetime zBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
+  datetime oBarTime = iTime(_Symbol, PERIOD_CURRENT, 1);
+  Print("zBarTime: ", zBarTime);
+  // → zeroBarTime: 2024.02.28 15:43:00
+  Print("oBarTime: ", oBarTime);
+  // →oneBarTime: 2024.02.28 15:42:00
+
   return(INIT_SUCCEEDED);
 }
 
-void OnStart()
-{
+// void OnStart()
+// {
   // double minVolume = SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN);
 	// double maxVolume = SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MAX);
 	// double stepVolume = SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
@@ -62,9 +75,24 @@ void OnStart()
 
   // string current_with_jpy;
   // StringAdd(settlement_currency, "JPY");
-  int length = StringLen(_Symbol);
-  string settlement_currency = StringSubstr(_Symbol, 3, length - 3);
+  // int length = StringLen(_Symbol);
+  // string settlement_currency = StringSubstr(_Symbol, 3, length - 3);
 
-  Print("settlement_currency: ", settlement_currency);
+  // Print("settlement_currency: ", settlement_currency);
 
+// }
+
+datetime lastBarTime = 0; // 最後に確認したバーの時間を格納する変数
+
+void OnTick()
+{
+    datetime currentBarTime = iTime(_Symbol, PERIOD_M1, 0); // 現在のバーのオープン時間を取得
+    if (currentBarTime != lastBarTime)
+    {
+        // 新しい足が確定した
+        lastBarTime = currentBarTime; // 最後のバー時間を更新
+
+        // ここに新しい足が確定した時の処理を記述
+        Print("excellent, currentBarTime: ", currentBarTime);
+    }
 }

@@ -27,6 +27,7 @@ bool isInRange;
 int pyramidingCount;
 double comparative_high; // ブレイク中の比較対象の足の高値
 double comparative_low; // ブレイク中の比較対象の足の安値
+datetime lastBarTime; // 最後に確認したバーの時間を格納する変数
 MqlTradeRequest request;
 MqlTradeResult result;
 
@@ -42,17 +43,30 @@ int OnInit()
   isInRange = true;
   comparative_high = 0.0;
   comparative_low = 0.0;
+  lastBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
   return(INIT_SUCCEEDED);
 }
 
 void OnTick()
 {
+  datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0); // 現在のバーのオープン時間を取得
+  if (currentBarTime == lastBarTime) return; // 足が確定するまではリターン
+  lastBarTime = currentBarTime; // 最後のバー時間を更新
+
+  Print("[OnTick] [global] highOfRange:", highOfRange);
+  Print("[OnTick] [global] lowOfRange:", lowOfRange);
+  Print("[OnTick] [global] currentDirectionOfBreakout:", currentDirectionOfBreakout);
+  Print("[OnTick] [global] previousDirectionOfBreakout:", previousDirectionOfBreakout);
+  Print("[OnTick] [global] isInRange:", isInRange);
+  Print("[OnTick] pyramidingCount: ", pyramidingCount);
   ZeroMemory(request);
   ZeroMemory(result);
 
   if(isInRange){
     // レンジブレイクしていなければ終了
+    Print("[OnTick] is in range.");
     if(!is_range_broken()) return;
+    Print("[OnTick] is range broken!!!");
     // 残留している逆指値注文をキャンセル
     cancel_opposite_order();
     // 前回のブレイク方向とは逆側にブレイクした場合
@@ -69,26 +83,24 @@ void OnTick()
     }
 
     isInRange = false; // レンジブレイクしたためレンジ内ではない
+    return;
   }
 
   if(!isInRange){
     // ④：天井or底が確定するのを待つ(更新が終わるのを待つ)
       // 更新されていたら（＝レンジが確定していないなら）：終了
       // 更新されなかったら（レンジが確定したなら）：再度レンジ導出(B)
+
+    Print("[OnTick] is not in range.");
     if(!is_range_confirmed()) return;
+    Print("[OnTick] is range confirmed!!!");
 
     // ⑥：新規の逆指値注文をレンジBの上下に入れる。
       // 位置や損切りは②と同じ
     send_order_both_stop_buy_and_stop_sell();
     isInRange = true; // レンジが確定したためレンジ内である
+    return;
   }
-
-  Print("[OnTick] [global] highOfRange:", highOfRange);
-  Print("[OnTick] [global] lowOfRange:", lowOfRange);
-  Print("[OnTick] [global] currentDirectionOfBreakout:", currentDirectionOfBreakout);
-  Print("[OnTick] [global] previousDirectionOfBreakout:", previousDirectionOfBreakout);
-  Print("[OnTick] [global] isInRange:", isInRange);
-  Print("[OnTick] pyramidingCount: ", pyramidingCount);
 }
 
 // ==============================================================================================
@@ -233,13 +245,14 @@ bool is_range_confirmed()
     // 押し安値or戻り高値
 void find_and_save_turning_point()
 {
-  // ENHANCE: 前回のpeak・bottomをglobalで扱う
   int index;
   int previous_peak_index;
   int previous_bottom_index;
   if(currentDirectionOfBreakout == "above"){
+    // ENHANCE: 前回のpeak・bottomをglobalで扱う
     previous_peak_index = count_bars_from_previous_peak_or_bottom();
     Print("[find_and_save_turning_point] previous_peak_index: ", previous_peak_index);
+    // ↓peak,bottomを対象に含まれるかを確認
     index = iLowest(Symbol(), Period(), MODE_LOW, previous_peak_index, 1);
     Print("[find_and_save_turning_point] index: ", index);
     Print("[find_and_save_turning_point] lowOfRange <1>: ", lowOfRange);
@@ -673,7 +686,6 @@ double verify_volume(double volume)
 double rate_by_count_of_pyramiding() // doubleでいいのか？
 {
   double rate;
-  Print("[verify_volume] pyramidingCount: ", pyramidingCount);
   switch (pyramidingCount)
   {
     case 0:

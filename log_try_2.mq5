@@ -27,8 +27,8 @@ string currentDirectionOfBreakout;
 string previousDirectionOfBreakout;
 bool isInRange;
 int pyramidingCount;
-double comparative_high; // ブレイク中の比較対象の足の高値
-double comparative_low; // ブレイク中の比較対象の足の安値
+double comparativeHigh; // ブレイク中の比較対象の足の高値
+double comparativeLow; // ブレイク中の比較対象の足の安値
 datetime lastBarTime; // 最後に確認したバーの時間を格納する変数
 MqlTradeRequest request;
 MqlTradeResult result;
@@ -42,15 +42,18 @@ int OnInit()
   pyramidingCount = 0;
   send_order_both_stop_buy_and_stop_sell();
   isInRange = true;
-  comparative_high = 0.0;
-  comparative_low = 0.0;
+  comparativeHigh = 0.0;
+  comparativeLow = 0.0;
   lastBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
   return(INIT_SUCCEEDED);
 }
 
+
+// リファクタリング：グローバル変数の更新はOnTick内のみとするべき。
 void OnTick()
 {
   // トレンドブレイク中は例外。方向感なくなったときを監視するため
+    // ↑ 少なくとも抱き足が確定した瞬間に決済する場合の話
   datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0); // 現在のバーのオープン時間を取得
   if (currentBarTime == lastBarTime) return; // 足が確定するまではリターン
   lastBarTime = currentBarTime; // 最後のバー時間を更新
@@ -60,16 +63,24 @@ void OnTick()
 
   if(isInRange){
     // レンジブレイクしていなければ終了
+    // リファクタリング
+      // previousDirectionOfBreakout
+      // currentDirectionOfBreakout
+      // comparativeHigh
+      // comparativeLow
     if(!is_range_broken()) return;
     // 残留している逆指値注文をキャンセル
     cancel_opposite_order();
     // 前回のブレイク方向とは逆側にブレイクした場合
     if(previousDirectionOfBreakout != currentDirectionOfBreakout) {
       close_opposite_positions();
+      // TODO: ↓これ本当かチェック
       // 今格納されている値がそのまま、押し目安値or戻り高値になるため、押し目安値or戻り高値を更新するロジックは不要
       pyramidingCount = 1;
     } else {
       // 上抜けの場合：押し目安値、 下抜けの場合：戻り高値 を導出し、grobal変数に格納
+      // リファクタリング
+      // TODO: 押し目安値・戻り高値が期待通りに導出できているか確認。
       find_and_save_turning_point();
       // ⑦：全てのポジションの損切り注文を更新する
       update_all_stop_loss();
@@ -85,6 +96,11 @@ void OnTick()
       // 更新されていたら（＝レンジが確定していないなら）：終了
       // 更新されなかったら（レンジが確定したなら）：再度レンジ導出(B)
 
+    // リファクタリング
+      // highOfRange
+      // lowOfRange
+      // comparativeHigh
+      // comparativeLow
     if(!is_range_confirmed()) return;
 
     // ⑥：新規の逆指値注文をレンジBの上下に入れる。
@@ -105,8 +121,8 @@ void OnTick()
 // 値が格納されるglobal変数
     // previousDirectionOfBreakout
     // currentDirectionOfBreakout
-    // comparative_high
-    // comparative_low
+    // comparativeHigh
+    // comparativeLow
 bool is_range_broken()
 {
   // 一旦、レンジの幅を超えてたらレンジブレイク確定というロジックにする。
@@ -122,8 +138,8 @@ bool is_range_broken()
     is_updated = true;
     previousDirectionOfBreakout = currentDirectionOfBreakout;
     currentDirectionOfBreakout = "above";
-    comparative_high = previous_high;
-    comparative_low = previous_low;
+    comparativeHigh = previous_high;
+    comparativeLow = previous_low;
   } else {
     is_updated = false;
   }
@@ -134,8 +150,8 @@ bool is_range_broken()
       is_updated = true;
       previousDirectionOfBreakout = currentDirectionOfBreakout;
       currentDirectionOfBreakout = "below";
-      comparative_high = previous_high;
-      comparative_low = previous_low;
+      comparativeHigh = previous_high;
+      comparativeLow = previous_low;
     } else {
       is_updated = false;
     }
@@ -146,7 +162,12 @@ bool is_range_broken()
 
 
 // 値が格納されるglobal変数
-    // 天井or底
+    // 天井 | 底
+    // highOfRange | lowOfRange
+    // comparativeHigh
+    // comparativeLow
+
+// TODO: 条件の比較をboolean関数にする
 bool is_range_confirmed()
 {
   double previous_high;
@@ -158,54 +179,80 @@ bool is_range_confirmed()
 
   if(currentDirectionOfBreakout == "above"){
     // 上抜け中の場合
-    if(previous_high <= comparative_high){
+
+    if(previous_high <= comparativeHigh){
       // 高値が更新されなかった場合
 
-      if (previous_low >= comparative_low) {
+      // レンジ確定
+      highOfRange = comparativeHigh;
+      is_confirmed = true;
+      if (previous_low >= comparativeLow) {
         // ハラミ足だった場合
-        is_confirmed = false;
-      } else {
-        // レンジ確定
-        highOfRange = comparative_high;
-        is_confirmed = true;
-        comparative_high = 0.0;
-        comparative_low = 0.0;
+
+        // レンジ確定(底＝ハラミ足の直前足の安値)
+        lowOfRange = comparativeLow;
       }
     } else {
       // 高値を更新した場合
-      comparative_high = previous_high;
-      comparative_low = previous_low;
-      is_confirmed = false;
+
+      if (previous_low < comparativeLow) {
+        // 抱き足だった場合
+
+        // レンジ確定(天井・底＝抱き足の高値・安値)
+        highOfRange = previous_high;
+        lowOfRange = previous_low;
+        is_confirmed = true;
+      } else {
+        // トレンド維持
+
+        comparativeHigh = previous_high;
+        comparativeLow = previous_low;
+        is_confirmed = false;
+      }
     }
   } else if(currentDirectionOfBreakout == "below"){
     // 下抜け中の場合
-    if(previous_low >= comparative_low){
+
+    if(previous_low >= comparativeLow){
       // 安値が更新されなかった場合
 
-      if (previous_high <= comparative_high) {
-        // ハラミ足だった場合
-        is_confirmed = false;
-      } else {
-        // レンジ確定
-        lowOfRange = comparative_low;
+      // レンジ確定
+        lowOfRange = comparativeLow;
         is_confirmed = true;
-        comparative_low = 0.0;
-        comparative_high = 0.0;
+      if (previous_high <= comparativeHigh) {
+        // ハラミ足だった場合
+
+        // レンジ確定(天井＝ハラミ足の直前足の高値)
+        highOfRange = comparativeHigh
       }
     } else {
       // 安値を更新した場合
-      comparative_low = previous_low;
-      comparative_high = previous_high;
-      is_confirmed = false;
+
+      if (previous_high > comparativeHigh) {
+        // 抱き足だった場合
+
+        // レンジ確定(天井・底＝抱き足の高値・安値)
+        highOfRange = previous_high;
+        lowOfRange = previous_low;
+        is_confirmed = true;
+      } else {
+        // トレンド維持
+
+        comparativeHigh = previous_high;
+        comparativeLow = previous_low;
+        is_confirmed = false;
+      }
     }
   } else {
+    // Error
   }
 
   return is_confirmed;
 }
 
 // 値が格納されるglobal変数
-    // 押し安値or戻り高値
+    // 押し安値 | 戻り高値
+    // lowOfRange | highOfRange
 void find_and_save_turning_point()
 {
   int index;

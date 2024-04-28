@@ -76,12 +76,10 @@ void OnTick()
       close_opposite_positions();
       // TODO:
       // ★押し目安値・戻り高値：レンジ内における直前の安値・高値（レンジ内で一番高い・低いは関係ない。レンジ内の最後の均衡点が押し目・戻りになるというロジック）
-
+      find_and_save_turning_point();
       pyramidingCount = 0;
     } else {
       // 上抜けの場合：押し目安値、 下抜けの場合：戻り高値 を導出し、grobal変数に格納
-      // リファクタリング
-      // TODO: 押し目安値・戻り高値が期待通りに導出できているか確認。
       find_and_save_turning_point();
       // ⑦：全てのポジションの損切り注文を更新する
       update_all_stop_loss();
@@ -258,65 +256,57 @@ bool is_range_confirmed()
 // ★押し目安値・戻り高値：レンジ内における直前の安値・高値（レンジ内で一番高い・低いは関係ない。レンジ内の最後の均衡点が押し目・戻りになるというロジック）
 void find_and_save_turning_point()
 {
-  int index;
-  int previous_peak_index;
-  int previous_bottom_index;
   if(currentDirectionOfBreakout == "above"){
-    // ENHANCE: 前回のpeak・bottomをglobalで扱う
-    previous_peak_index = count_bars_from_previous_peak_or_bottom();
-    // ↓peak,bottomを対象に含まれるかを確認
-    index = iLowest(Symbol(), Period(), MODE_LOW, previous_peak_index, 1);
-    lowOfRange = iLow(Symbol(),Period(), index + 1);
+    lowOfRange = find_last_low();
   } else if(currentDirectionOfBreakout == "below") {
-    previous_bottom_index = count_bars_from_previous_peak_or_bottom();
-    index = iHighest(Symbol(), Period(), MODE_HIGH, previous_bottom_index, 1);
-    highOfRange = iHigh(Symbol(),Period(), index + 1);
+    highOfRange = find_last_high();
   } else {
   }
 }
 
-int count_bars_from_previous_peak_or_bottom()
+// TODO: 色々な考え方がある。何を基準に高値を導出するか？
+  // 今回は「買い手と売り手の均衡点」という視点で導出
+  // 下がり続けている中で、最後に高値が上がったところが高値の限界点であるとする
+double find_last_high()
 {
-  // TODO: データ型とかのせいで、小数点の値がズレたりしてるかも
-  int index;
+  double last_high;
+  // ↓レンジブレイクした足の高値
+  double previous_bar_high = iHigh(Symbol(),Period(), 1);
   bool is_not_found = true;
-
-  if(currentDirectionOfBreakout == "above"){
-    // 天井までの足の数を導き出す
-    double high;
-    // 直前の確定済み足から始める→ i = 1;
-    for(int i = 1; is_not_found; i++)
-    {
-      high = iHigh(Symbol(),Period(), i);
-      if(high == highOfRange){ // TODO: highを正規化とかしてないなら一致しないんじゃね？→無限ループになりそう
-        index = i;
-        is_not_found = false;
-      }
-      if (i == 300) {
-        break;
-      }
+  double high;
+  for(int i = 2; is_not_found; i++){
+    high = iHigh(Symbol(),Period(), i);
+    if(high > previous_bar_high){
+      previous_bar_high = high
+    } else {
+      last_high = previous_bar_high;
+      is_not_found = false;
     }
-  } else if(currentDirectionOfBreakout == "below") {
-    // 底までの足の数を導き出す
-    double low;
-    // 直前の確定済み足から始める→ i = 1;
-    for(int i = 1; is_not_found; i++)
-    {
-      low = iLow(Symbol(),Period(), i);
-      if(low == lowOfRange){ // TODO: lowを正規化とかしてないなら一致しないんじゃね？→無限ループになりそう
-        index = i;
-        is_not_found = false;
-      }
-      if (i == 300) {
-        break;
-      }
-    }
-  } else {
   }
 
-  // TODO: indexの値がおかしかったらエラー制御
-  return index;
+  return last_high;
 }
+
+double find_last_low()
+{
+  double last_low;
+  // ↓レンジブレイクした足の安値
+  double previous_bar_low = iLow(Symbol(),Period(), 1);
+  bool is_not_found = true;
+  double low;
+  for(int i = 2; is_not_found; i++){
+    low = iLow(Symbol(),Period(), i);
+    if(low < previous_bar_low){
+      previous_bar_low = low
+    } else {
+      last_low = previous_bar_low;
+      is_not_found = false;
+    }
+  }
+
+  return last_low;
+}
+
 
 // ==============================================================================================
 // ↓逆指値注文 =================================================================================

@@ -222,7 +222,7 @@ bool is_range_confirmed()
         // ハラミ足だった場合
 
         // レンジ確定(天井＝ハラミ足の直前足の高値)
-        highOfRange = comparativeHigh
+        highOfRange = comparativeHigh;
       }
     } else {
       // 安値を更新した場合
@@ -277,7 +277,7 @@ double find_last_high()
   for(int i = 2; is_not_found; i++){
     high = iHigh(Symbol(),Period(), i);
     if(high > previous_bar_high){
-      previous_bar_high = high
+      previous_bar_high = high;
     } else {
       last_high = previous_bar_high;
       is_not_found = false;
@@ -297,7 +297,7 @@ double find_last_low()
   for(int i = 2; is_not_found; i++){
     low = iLow(Symbol(),Period(), i);
     if(low < previous_bar_low){
-      previous_bar_low = low
+      previous_bar_low = low;
     } else {
       last_low = previous_bar_low;
       is_not_found = false;

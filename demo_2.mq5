@@ -311,6 +311,8 @@ double find_last_low()
 // ==============================================================================================
 // ↓逆指値注文 =================================================================================
 
+// TODO: fix bug about return code 10015 :
+  // TRADE_RETCODE_INVALID_PRICE (リクエスト内の無効な価格。)
 void send_order_both_stop_buy_and_stop_sell()
 {
   ZeroMemory(request);
@@ -339,7 +341,7 @@ void send_order_both_stop_buy_and_stop_sell()
   if(!OrderSend(request,result)){
     print_error_of_send_order("buy_stop");
   }
-  print_information_of_send_error("buy_stop");
+  // print_information_of_send_error("buy_stop");
 
   // sell_stop //--- 操作パラメータの設定
   ZeroMemory(result); // requestは初期化せず使い回す
@@ -351,13 +353,14 @@ void send_order_both_stop_buy_and_stop_sell()
   if(!OrderSend(request,result)){
     print_error_of_send_order("sell_stop");
   }
-  print_information_of_send_error("sell_stop");
 }
 
 // ==============================================================================================
 // ↓注文・ポジションの更新/キャンセル/決済 =====================================================
 
-void update_all_stop_loss() // TODO: 動作確認
+// TODO: fix stop level
+ // 10016 TRADE_RETCODE_INVALID_STOPS (リクエスト内の無効なストップ。)
+void update_all_stop_loss()
 {
   ZeroMemory(request);
   ZeroMemory(result);
@@ -399,10 +402,10 @@ void update_all_stop_loss() // TODO: 動作確認
     if(!OrderSend(request,result)){
       print_error_of_send_order("update_all_stop_loss");
     }
-    print_information_of_send_error("update_all_stop_loss");
   }
 }
 
+// TODO: 10018 TRADE_RETCODE_MARKET_CLOSED (市場が閉鎖中。)
 void cancel_opposite_order()
 {
   int same_magic_count = 0;
@@ -422,7 +425,6 @@ void cancel_opposite_order()
     if(!OrderSend(request,result)){
       print_error_of_send_order("cancel_opposite_order");
     }
-    print_information_of_send_error("cancel_opposite_order");
   }
 
   // magic_number（適応されているペア）内に逆指値注文は１つだけのはず
@@ -431,6 +433,9 @@ void cancel_opposite_order()
   }
 }
 
+// TODO: fix stop level
+ // 10016 TRADE_RETCODE_INVALID_STOPS (リクエスト内の無効なストップ。)
+// 10030 TRADE_RETCODE_INVALID_FILL (無効な注文充填タイプ。)
 void close_opposite_positions()
 {
   ENUM_POSITION_TYPE type_of_position_closing;
@@ -476,7 +481,6 @@ void close_opposite_positions()
     if(!OrderSend(request,result)){
       print_error_of_send_order("close_opposite_positions");
     }
-    print_information_of_send_error("close_opposite_positions");
   }
 }
 
@@ -485,13 +489,143 @@ void close_opposite_positions()
 
 void print_error_of_send_order(string function_name)
 {
-  PrintFormat("！！！OrderSend(%s) Error: %d", function_name, GetLastError()); // リクエストの送信に失敗した場合、エラーコードを出力
+  // リクエストの送信に失敗した場合、エラーコードを出力
+  PrintFormat("！！！OrderSend(%s) Error: %d", function_name, GetLastError());
+  PrintFormat("OrderSend(%s): retcode=%u  deal=%I64u  order=%I64u", function_name, result.retcode, result.deal, result.order);
+  print_retcode_message_converted_to_jp(result.retcode);
   ResetLastError(); // GetLastError()で_LastErrorの値が変更されているためリセット
 }
 
-void print_information_of_send_error(string function_name)
+void print_retcode_message_converted_to_jp(uint retcode)
 {
-  PrintFormat("OrderSend(%s): retcode=%u  deal=%I64u  order=%I64u", function_name, result.retcode, result.deal, result.order);
+  switch(retcode) {
+    case 10004:
+      Print("リクオート。");
+      break;
+    case 10006:
+      Print("リクエストの拒否。");
+      break;
+    case 10007:
+      Print("トレーダーによるリクエストのキャンセル。");
+      break;
+    case 10008:
+      Print("注文が出されました。");
+      break;
+    case 10009:
+      Print("リクエスト完了。");
+      break;
+    case 10010:
+      Print("リクエストが一部のみ完了。");
+      break;
+    case 10011:
+      Print("リクエスト処理エラー。");
+      break;
+    case 10012:
+      Print("リクエストが時間切れでキャンセル。");
+      break;
+    case 10013:
+      Print("無効なリクエスト。");
+      break;
+    case 10014:
+      Print("リクエスト内の無効なボリューム。");
+      break;
+    case 10015:
+      Print("リクエスト内の無効な価格。");
+      break;
+    case 10016:
+      Print("リクエスト内の無効なストップ。");
+      break;
+    case 10017:
+      Print("取引が無効化されています。");
+      break;
+    case 10018:
+      Print("市場が閉鎖中。");
+      break;
+    case 10019:
+      Print("リクエストを完了するのに資金が不充分。");
+      break;
+    case 10020:
+      Print("価格変更。");
+      break;
+    case 10021:
+      Print("リクエスト処理に必要な相場が不在。");
+      break;
+    case 10022:
+      Print("リクエスト内の無効な注文有効期限。");
+      break;
+    case 10023:
+      Print("注文状態の変化。");
+      break;
+    case 10024:
+      Print("頻繁過ぎるリクエスト。");
+      break;
+    case 10025:
+      Print("リクエストに変更なし。");
+      break;
+    case 10026:
+      Print("サーバが自動取引を無効化。");
+      break;
+    case 10027:
+      Print("クライアント端末が自動取引を無効化。");
+      break;
+    case 10028:
+      Print("リクエストが処理のためにロック中。");
+      break;
+    case 10029:
+      Print("注文やポジションが凍結。");
+      break;
+    case 10030:
+      Print("無効な注文充填タイプ。");
+      break;
+    case 10031:
+      Print("取引サーバに未接続。");
+      break;
+    case 10032:
+      Print("操作は、ライブ口座のみで許可。");
+      break;
+    case 10033:
+      Print("未決注文の数が上限に達しました。");
+      break;
+    case 10034:
+      Print("シンボルの注文やポジションのボリュームが限界に達しました。");
+      break;
+    case 10035:
+      Print("不正または禁止された注文の種類。");
+      break;
+    case 10036:
+      Print("指定されたPOSITION_IDENTIFIER を持つポジションがすでに閉鎖。");
+      break;
+    case 10038:
+      Print("決済ボリュームが現在のポジションのボリュームを超過。");
+      break;
+    case 10039:
+      Print("指定されたポジションの決済注文が既存。これは、ヘッジシステムでの作業中に発生する可能性があります。");
+      break;
+    case 10040:
+      Print("アカウントに同時に存在するポジションの数は、サーバー設定によって制限されます。 限度に達すると、サーバーは出された注文を処理するときにTRADE_RETCODE_LIMIT_POSITIONSエラーを返します。 これは、ポジション会計タイプによって異なる動作につながります。");
+      break;
+    case 10041:
+      Print("未決注文アクティベーションリクエストは却下され、注文はキャンセルされます。");
+      break;
+    case 10042:
+      Print("銘柄に\"Only long positions are allowed（買いポジションのみ）\" (POSITION_TYPE_BUY)のルールが設定されているため、リクエストは却下されます。");
+      break;
+    case 10043:
+      Print("銘柄に\"Only short positions are allowed（売りポジションのみ）\" (POSITION_TYPE_SELL)のルールが設定されているため、リクエストは却下されます。");
+      break;
+    case 10044:
+      Print("銘柄に\"Only position closing is allowed（ポジション決済のみ）\"のルールが設定されているため、リクエストは却下されます。");
+      break;
+    case 10045:
+      Print("取引口座に\"Position closing is allowed only by FIFO rule（FIFOによるポジション決済のみ）\"(ACCOUNT_FIFO_CLOSE=true)のフラグが設定されているため、リクエストは却下されます。");
+      break;
+    case 10046:
+      Print("口座で「単一の銘柄の反対のポジションは無効にする」ルールが設定されているため、リクエストが拒否されます。");
+      break;
+    default:
+      Print("未定義のエラーコードです。");
+      break;
+  }
 }
 
 // ==============================================================================================

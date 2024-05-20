@@ -32,6 +32,10 @@ double comparativeLow; // ブレイク中の比較対象の足の安値
 datetime lastBarTime; // 最後に確認したバーの時間を格納する変数
 MqlTradeRequest request;
 MqlTradeResult result;
+// 市場閉鎖でSendOrderがエラー発生した場合true
+// cancel_opposite_orderでのみ発生している前提のロジックとなっている。
+bool isRetcodeMarketClosed;
+// int fillType;
 
 int OnInit()
 {
@@ -45,6 +49,8 @@ int OnInit()
   comparativeHigh = 0.0;
   comparativeLow = 0.0;
   lastBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
+  isRetcodeMarketClosed = false;
+  // fillType = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
   return(INIT_SUCCEEDED);
 }
 
@@ -63,18 +69,16 @@ void OnTick()
 
   if(isInRange){
     // レンジブレイクしていなければ終了
-    // リファクタリング
-      // previousDirectionOfBreakout
-      // currentDirectionOfBreakout
-      // comparativeHigh
-      // comparativeLow
-    if(!is_range_broken()) return;
+
+    // retcode 10018(市場閉鎖)フラグがtrueの場合、is_range_brokenチェックをスキップ
+    if (!isRetcodeMarketClosed && !is_range_broken()) return;
+    isRetcodeMarketClosed = false;
     // 残留している逆指値注文をキャンセル
-    cancel_opposite_order();
+    cancel_opposite_order(); // 市場閉鎖エラーが発生した場合、isRetcodeMarketClosedをtrueにする
+    if (isRetcodeMarketClosed) return;
     // 前回のブレイク方向とは逆側にブレイクした場合
     if(previousDirectionOfBreakout != currentDirectionOfBreakout) {
       close_opposite_positions();
-      // TODO:
       // ★押し目安値・戻り高値：レンジ内における直前の安値・高値（レンジ内で一番高い・低いは関係ない。レンジ内の最後の均衡点が押し目・戻りになるというロジック）
       find_and_save_turning_point();
       pyramidingCount = 0;
@@ -324,7 +328,7 @@ void send_order_both_stop_buy_and_stop_sell()
   //--- 操作パラメータの設定
   request.action = TRADE_ACTION_PENDING;
   request.symbol = Symbol();
-  request.deviation = 5;
+  request.deviation = 10;
   request.magic = expertMagic;
   double price;
   double sl;
@@ -340,6 +344,9 @@ void send_order_both_stop_buy_and_stop_sell()
   request.volume = volume_with_risk_manegemant();
   if(!OrderSend(request,result)){
     print_error_of_send_order("buy_stop");
+    Print("request.price: ", request.price);
+    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    Print("current ask price: ", ask);
   }
   // print_information_of_send_error("buy_stop");
 
@@ -352,6 +359,9 @@ void send_order_both_stop_buy_and_stop_sell()
   request.sl = NormalizeDouble(sl, digits); // 正規化された損切り価格
   if(!OrderSend(request,result)){
     print_error_of_send_order("sell_stop");
+    Print("request.price: ", request.price);
+    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    Print("current bid price: ", bid);
   }
 }
 
@@ -360,6 +370,7 @@ void send_order_both_stop_buy_and_stop_sell()
 
 // TODO: fix stop level
  // 10016 TRADE_RETCODE_INVALID_STOPS (リクエスト内の無効なストップ。)
+ // →更新前のslとrequest.slが同じ値になっている
 void update_all_stop_loss()
 {
   ZeroMemory(request);
@@ -396,11 +407,20 @@ void update_all_stop_loss()
       sl = highOfRange + point;
       request.sl = NormalizeDouble(sl, digits);
     } else {
+      Print("update_all_stop_loss: type was mismatched!!! ");
+      Print("type(0=buy, 1=sell): ", type);
+      Print("currentDirection: ", currentDirectionOfBreakout);
     }
 
     //--- リクエストの送信
     if(!OrderSend(request,result)){
       print_error_of_send_order("update_all_stop_loss");
+      Print("request.sl: ", request.sl);
+      Print("type(0==buy, 1==sell): ", type);
+      double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      Print("current ask price: ", ask);
+      double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      Print("current bid price: ", bid);
     }
   }
 }
@@ -424,18 +444,20 @@ void cancel_opposite_order()
     // 残留した未決注文をキャンセル
     if(!OrderSend(request,result)){
       print_error_of_send_order("cancel_opposite_order");
+      // result.retcodeが10018のとき、再試行したい
+      if(result.retcode == 10018) isRetcodeMarketClosed = true;
     }
   }
 
   // magic_number（適応されているペア）内に逆指値注文は１つだけのはず
     // 片方はポジションになったため
   if(same_magic_count > 1){
+    Print("cancel_opposite_order: same_magic_count is: ", same_magic_count);
   }
 }
 
-// TODO: fix stop level
- // 10016 TRADE_RETCODE_INVALID_STOPS (リクエスト内の無効なストップ。)
-// 10030 TRADE_RETCODE_INVALID_FILL (無効な注文充填タイプ。)
+// ✅10030 TRADE_RETCODE_INVALID_FILL (無効な注文充填タイプ。)
+// TODO: 10018 TRADE_RETCODE_MARKET_CLOSED (市場が閉鎖中。)
 void close_opposite_positions()
 {
   ENUM_POSITION_TYPE type_of_position_closing;
@@ -446,6 +468,7 @@ void close_opposite_positions()
   {
     type_of_position_closing = POSITION_TYPE_BUY;
   } else {
+    Print("close_opposite_positions: previousDirectionOfBreakout was wrong!!! ");
   }
 
   int total = PositionsTotal();
@@ -466,8 +489,10 @@ void close_opposite_positions()
     request.position = position_ticket;
     request.symbol = position_symbol;
     request.volume = volume;
-    request.deviation = 5; // 最大許容偏差＝スリッページ（値はポイント）
+    request.deviation = 10; // 最大許容偏差＝スリッページ（値はポイント）
     request.magic = expertMagic;
+    // int fillType = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
+    request.type_filling = 1;
     //--- ポジションタイプによる注文タイプと価格の設定
     if(type == POSITION_TYPE_BUY)
     {
@@ -480,7 +505,11 @@ void close_opposite_positions()
     // 決済
     if(!OrderSend(request,result)){
       print_error_of_send_order("close_opposite_positions");
+      if(result.retcode == 10030){
+        Print("request.type_filling: ", request.type_filling);
+      }
     }
+    // fillされたときに、残りのポジションを再度closeする。（retcodeでfillポリシーが適用されたか確認する？）
   }
 }
 

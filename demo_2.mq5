@@ -4,7 +4,19 @@
 //|                                             https://www.mql5.com |
 //+------------------------------------------------------------------+
 
-// 方向感なくなったときに見
+// ロジック：
+// 戻り高値導出：
+  // 過去に1個ずつ遡っていって、
+  // 高値が更新されなくなったら
+  // その手前の足の高値が戻り高値。
+// 押し安値導出：
+  // 過去に1個ずつ遡っていって、
+  // 安値が更新されなくなったら
+  // その手前の足の安値が押し安値。
+
+// レンジ相場かトレンド継続か：
+  // どちらかの条件が満たされていない場合(はらみ足・包み足)に一旦レンジ相場に突入という判断
+  // 抱き足：その足の高値安値がレンジの壁になる
 
 #property copyright "Copyright 2023, MetaQuotes Ltd."
 #property link      "https://www.mql5.com"
@@ -104,6 +116,7 @@ void OnTick()
       // lowOfRange
       // comparativeHigh
       // comparativeLow
+      // ↓ここで押し安値・戻り高値に代入してはいけない！
     if(!is_range_confirmed()) return;
 
     // ⑥：新規の逆指値注文をレンジBの上下に入れる。
@@ -135,29 +148,35 @@ bool is_range_broken()
   // ↓現在進行系の足の一個前ということ→確定済みの足（最新）
   double previous_high = iHigh(Symbol(),Period(), 1);
   double previous_low = iLow(Symbol(),Period(), 1);
-  bool is_updated;
+  bool is_updated = false;
 
-  if(previous_high > highOfRange){
+  // ↓レンジの上下を同時に更新するのは考えにくいが念の為
+  // if(previous_high > highOfRange && previous_low < lowOfRange){
+  //   is_updated = true;
+  //   previousDirectionOfBreakout = currentDirectionOfBreakout;
+  //   currentDirectionOfBreakout = "both";
+  //   comparativeHigh = previous_high;
+  //   comparativeLow = previous_low;
+  //   highOfRange = previous_high;
+  //   lowOfRange = previous_low;
+  // } else {
+  //   is_updated = false;
+  // }
+
+  if(is_updated == false && previous_high > highOfRange){
     is_updated = true;
     previousDirectionOfBreakout = currentDirectionOfBreakout;
     currentDirectionOfBreakout = "above";
     comparativeHigh = previous_high;
     comparativeLow = previous_low;
-  } else {
-    is_updated = false;
   }
 
-  // ↓レンジの上下を同時に更新するのは考えにくいため
-  if(is_updated == false ){
-    if(previous_low < lowOfRange){
-      is_updated = true;
-      previousDirectionOfBreakout = currentDirectionOfBreakout;
-      currentDirectionOfBreakout = "below";
-      comparativeHigh = previous_high;
-      comparativeLow = previous_low;
-    } else {
-      is_updated = false;
-    }
+  if(is_updated == false && previous_low < lowOfRange){
+    is_updated = true;
+    previousDirectionOfBreakout = currentDirectionOfBreakout;
+    currentDirectionOfBreakout = "below";
+    comparativeHigh = previous_high;
+    comparativeLow = previous_low;
   }
 
   return is_updated;
@@ -193,7 +212,7 @@ bool is_range_confirmed()
         // ハラミ足だった場合
 
         // レンジ確定(底＝ハラミ足の直前足の安値)
-        lowOfRange = comparativeLow;
+        // lowOfRange = comparativeLow;
       }
     } else {
       // 高値を更新した場合
@@ -201,9 +220,8 @@ bool is_range_confirmed()
       if (previous_low < comparativeLow) {
         // 抱き足だった場合
 
-        // レンジ確定(天井・底＝抱き足の高値・安値)
+        // レンジ確定(天井＝抱き足の高値)
         highOfRange = previous_high;
-        lowOfRange = previous_low;
         is_confirmed = true;
       } else {
         // トレンド維持
@@ -226,7 +244,7 @@ bool is_range_confirmed()
         // ハラミ足だった場合
 
         // レンジ確定(天井＝ハラミ足の直前足の高値)
-        highOfRange = comparativeHigh;
+        // highOfRange = comparativeHigh;
       }
     } else {
       // 安値を更新した場合
@@ -234,8 +252,7 @@ bool is_range_confirmed()
       if (previous_high > comparativeHigh) {
         // 抱き足だった場合
 
-        // レンジ確定(天井・底＝抱き足の高値・安値)
-        highOfRange = previous_high;
+        // レンジ確定（底＝抱き足の安値)
         lowOfRange = previous_low;
         is_confirmed = true;
       } else {
@@ -247,7 +264,7 @@ bool is_range_confirmed()
       }
     }
   } else {
-    // Error
+    Print("！！！is_range_confirmed: fucked up!!!");
   }
 
   return is_confirmed;
@@ -265,6 +282,7 @@ void find_and_save_turning_point()
   } else if(currentDirectionOfBreakout == "below") {
     highOfRange = find_last_high();
   } else {
+    Print("！！！find_and_save_turning_point: fucked up!!!");
   }
 }
 
@@ -283,6 +301,7 @@ double find_last_high()
     if(high > previous_bar_high){
       previous_bar_high = high;
     } else {
+      // high == previous_bar_highの場合も強い壁があるという判断
       last_high = previous_bar_high;
       is_not_found = false;
     }
@@ -303,6 +322,7 @@ double find_last_low()
     if(low < previous_bar_low){
       previous_bar_low = low;
     } else {
+      // low == previous_bar_lowの場合も強い壁があるという判断
       last_low = previous_bar_low;
       is_not_found = false;
     }
@@ -370,7 +390,7 @@ void send_order_both_stop_buy_and_stop_sell()
 
 // TODO: fix stop level
  // 10016 TRADE_RETCODE_INVALID_STOPS (リクエスト内の無効なストップ。)
- // →更新前のslとrequest.slが同じ値になっている
+ // →更新前のslとrequest.slが同じ値になっている（←これ目視で確認！！）
 void update_all_stop_loss()
 {
   ZeroMemory(request);
@@ -407,7 +427,8 @@ void update_all_stop_loss()
       sl = highOfRange + point;
       request.sl = NormalizeDouble(sl, digits);
     } else {
-      Print("update_all_stop_loss: type was mismatched!!! ");
+      // レンジをどちらにも抜けたらミスマッチする
+      Print("★update_all_stop_loss: type was mismatched!!! ");
       Print("type(0=buy, 1=sell): ", type);
       Print("currentDirection: ", currentDirectionOfBreakout);
     }
@@ -452,7 +473,7 @@ void cancel_opposite_order()
   // magic_number（適応されているペア）内に逆指値注文は１つだけのはず
     // 片方はポジションになったため
   if(same_magic_count > 1){
-    Print("cancel_opposite_order: same_magic_count is: ", same_magic_count);
+    Print("★cancel_opposite_order: same_magic_count is: ", same_magic_count);
   }
 }
 
@@ -468,7 +489,7 @@ void close_opposite_positions()
   {
     type_of_position_closing = POSITION_TYPE_BUY;
   } else {
-    Print("close_opposite_positions: previousDirectionOfBreakout was wrong!!! ");
+    Print("★close_opposite_positions: previousDirectionOfBreakout was wrong!!! ");
   }
 
   int total = PositionsTotal();
@@ -519,7 +540,7 @@ void close_opposite_positions()
 void print_error_of_send_order(string function_name)
 {
   // リクエストの送信に失敗した場合、エラーコードを出力
-  PrintFormat("！！！OrderSend(%s) Error: %d", function_name, GetLastError());
+  PrintFormat("OrderSend(%s) Error: %d", function_name, GetLastError());
   PrintFormat("OrderSend(%s): retcode=%u  deal=%I64u  order=%I64u", function_name, result.retcode, result.deal, result.order);
   print_retcode_message_converted_to_jp(result.retcode);
   ResetLastError(); // GetLastError()で_LastErrorの値が変更されているためリセット

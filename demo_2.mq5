@@ -205,31 +205,25 @@ bool is_range_confirmed()
     if(previous_high <= comparativeHigh){
       // 高値が更新されなかった場合
 
-      // レンジ確定
-      highOfRange = comparativeHigh;
-      is_confirmed = true;
       if (previous_low >= comparativeLow) {
         // ハラミ足だった場合
 
-        // レンジ確定(底＝ハラミ足の直前足の安値)
-        // lowOfRange = comparativeLow;
+        // トレンド継続
+        is_confirmed = false;
+      } else {
+        // ハラミ足ではなかった場合
+
+        // レンジ確定
+        highOfRange = comparativeHigh;
+        is_confirmed = true;
       }
     } else {
       // 高値を更新した場合
 
-      if (previous_low < comparativeLow) {
-        // 抱き足だった場合
-
-        // レンジ確定(天井＝抱き足の高値)
-        highOfRange = previous_high;
-        is_confirmed = true;
-      } else {
-        // トレンド維持
-
-        comparativeHigh = previous_high;
-        comparativeLow = previous_low;
-        is_confirmed = false;
-      }
+      // トレンド維持
+      is_confirmed = false;
+      comparativeHigh = previous_high;
+      comparativeLow = previous_low;
     }
   } else if(currentDirectionOfBreakout == "below"){
     // 下抜け中の場合
@@ -243,25 +237,22 @@ bool is_range_confirmed()
       if (previous_high <= comparativeHigh) {
         // ハラミ足だった場合
 
-        // レンジ確定(天井＝ハラミ足の直前足の高値)
-        // highOfRange = comparativeHigh;
+        // トレンド継続
+        is_confirmed = false;
+      } else {
+        // ハラミ足ではなかった場合
+
+        // レンジ確定
+        lowOfRange = comparativeLow;
+        is_confirmed = true;
       }
     } else {
       // 安値を更新した場合
 
-      if (previous_high > comparativeHigh) {
-        // 抱き足だった場合
-
-        // レンジ確定（底＝抱き足の安値)
-        lowOfRange = previous_low;
-        is_confirmed = true;
-      } else {
-        // トレンド維持
-
-        comparativeHigh = previous_high;
-        comparativeLow = previous_low;
-        is_confirmed = false;
-      }
+      // トレンド維持
+      is_confirmed = false;
+      comparativeHigh = previous_high;
+      comparativeLow = previous_low;
     }
   } else {
     Print("！！！is_range_confirmed: fucked up!!!");

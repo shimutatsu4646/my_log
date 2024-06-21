@@ -85,24 +85,39 @@ void OnTick()
     // retcode 10018(市場閉鎖)フラグがtrueの場合、is_range_brokenチェックをスキップ
     if (!isRetcodeMarketClosed && !is_range_broken()) return;
     isRetcodeMarketClosed = false;
-    // 残留している逆指値注文をキャンセル
-    cancel_opposite_order(); // 市場閉鎖エラーが発生した場合、isRetcodeMarketClosedをtrueにする
-    if (isRetcodeMarketClosed) return;
-    // 前回のブレイク方向とは逆側にブレイクした場合
-    if(previousDirectionOfBreakout != currentDirectionOfBreakout) {
-      close_opposite_positions();
-      // ★押し目安値・戻り高値：レンジ内における直前の安値・高値（レンジ内で一番高い・低いは関係ない。レンジ内の最後の均衡点が押し目・戻りになるというロジック）
-      find_and_save_turning_point();
-      pyramidingCount = 0;
-    } else {
-      // 上抜けの場合：押し目安値、 下抜けの場合：戻り高値 を導出し、grobal変数に格納
+
+    if(currentDirectionOfBreakout != "both"){
+      // 残留している逆指値注文をキャンセル
+      // 市場閉鎖エラーが発生した場合、isRetcodeMarketClosedをtrueにする
+      cancel_opposite_order();
+      if (isRetcodeMarketClosed) return;
+
+      // 前回のブレイク方向とは逆側にブレイクした場合
+      if(previousDirectionOfBreakout != "both" && previousDirectionOfBreakout != currentDirectionOfBreakout) {
+        close_opposite_positions();
+        pyramidingCount = 0;
+      } else {
+        // 前回が両方へのブレイクだった or 同方向にブレイクした場合
+        pyramidingCount += 1;
+      }
+
+      // 転換点を導出し、grobal変数に格納
       find_and_save_turning_point();
       // ⑦：全てのポジションの損切り注文を更新する
       update_all_stop_loss();
-      pyramidingCount += 1;
+      // レンジブレイクしたためレンジ内ではない
+      isInRange = false;
+
+    } else {
+      // current~~がbothだった場合
+
+      // ポジション全決済の処理
+      close_all_positions();
+      pyramidingCount = 0;
+      // レンジブレイクした足自体が新しいレンジとなる
+      isInRange = true;
     }
 
-    isInRange = false; // レンジブレイクしたためレンジ内ではない
     return;
   }
 
@@ -146,37 +161,36 @@ bool is_range_broken()
     // →注文が執行されていたらレンジブレイク確定というロジックに変更する。
 
   // ↓現在進行系の足の一個前ということ→確定済みの足（最新）
-  double previous_high = iHigh(Symbol(),Period(), 1);
-  double previous_low = iLow(Symbol(),Period(), 1);
+  double latest_bar_high = iHigh(Symbol(),Period(), 1);
+  double latest_bar_low = iLow(Symbol(),Period(), 1);
   bool is_updated = false;
 
-  // ↓レンジの上下を同時に更新するのは考えにくいが念の為
-  // if(previous_high > highOfRange && previous_low < lowOfRange){
-  //   is_updated = true;
-  //   previousDirectionOfBreakout = currentDirectionOfBreakout;
-  //   currentDirectionOfBreakout = "both";
-  //   comparativeHigh = previous_high;
-  //   comparativeLow = previous_low;
-  //   highOfRange = previous_high;
-  //   lowOfRange = previous_low;
-  // } else {
-  //   is_updated = false;
-  // }
+  if(latest_bar_high > highOfRange && latest_bar_low < lowOfRange){
+    // レンジを上下どちらにも更新した場合
+    is_updated = true;
+    previousDirectionOfBreakout = currentDirectionOfBreakout;
+    currentDirectionOfBreakout = "both";
+    comparativeHigh = latest_bar_high;
+    comparativeLow = latest_bar_low;
+    // この足がレンジになる
+    highOfRange = latest_bar_high;
+    lowOfRange = latest_bar_low;
+  }
 
-  if(is_updated == false && previous_high > highOfRange){
+  if(is_updated == false && latest_bar_high > highOfRange){
     is_updated = true;
     previousDirectionOfBreakout = currentDirectionOfBreakout;
     currentDirectionOfBreakout = "above";
-    comparativeHigh = previous_high;
-    comparativeLow = previous_low;
+    comparativeHigh = latest_bar_high;
+    comparativeLow = latest_bar_low;
   }
 
-  if(is_updated == false && previous_low < lowOfRange){
+  if(is_updated == false && latest_bar_low < lowOfRange){
     is_updated = true;
     previousDirectionOfBreakout = currentDirectionOfBreakout;
     currentDirectionOfBreakout = "below";
-    comparativeHigh = previous_high;
-    comparativeLow = previous_low;
+    comparativeHigh = latest_bar_high;
+    comparativeLow = latest_bar_low;
   }
 
   return is_updated;
@@ -192,70 +206,56 @@ bool is_range_broken()
 // TODO: 条件の比較をboolean関数にする
 bool is_range_confirmed()
 {
-  double previous_high;
-  double previous_low;
+  double latest_bar_high;
+  double latest_bar_low;
   bool is_confirmed;
   // 最新の確定した足
-  previous_high = iHigh(Symbol(),Period(), 1);
-  previous_low = iLow(Symbol(),Period(), 1);
+  latest_bar_high = iHigh(Symbol(),Period(), 1);
+  latest_bar_low = iLow(Symbol(),Period(), 1);
 
   if(currentDirectionOfBreakout == "above"){
     // 上抜け中の場合
 
-    if(previous_high <= comparativeHigh){
+    if(latest_bar_high > comparativeHigh){
+      // 高値更新
+      comparativeHigh = latest_bar_high;
+      comparativeLow = latest_bar_low;
+      is_confirmed = false;
+    } else {
       // 高値が更新されなかった場合
 
-      if (previous_low >= comparativeLow) {
-        // ハラミ足だった場合
-
-        // トレンド継続
-        is_confirmed = false;
-      } else {
-        // ハラミ足ではなかった場合
-
-        // レンジ確定
+      if (latest_bar_low < comparativeLow) {
+        // 安値更新
         highOfRange = comparativeHigh;
         is_confirmed = true;
+      } else {
+        // ハラミ足
+        is_confirmed = false;
       }
-    } else {
-      // 高値を更新した場合
-
-      // トレンド維持
-      is_confirmed = false;
-      comparativeHigh = previous_high;
-      comparativeLow = previous_low;
     }
   } else if(currentDirectionOfBreakout == "below"){
     // 下抜け中の場合
 
-    if(previous_low >= comparativeLow){
+    if(latest_bar_low < comparativeLow){
+      // 安値更新
+      comparativeHigh = latest_bar_high;
+      comparativeLow = latest_bar_low;
+      is_confirmed = false;
+    } else {
       // 安値が更新されなかった場合
 
-      // レンジ確定
+      if (latest_bar_high > comparativeHigh) {
+        // 高値更新
         lowOfRange = comparativeLow;
         is_confirmed = true;
-      if (previous_high <= comparativeHigh) {
-        // ハラミ足だった場合
-
-        // トレンド継続
-        is_confirmed = false;
       } else {
-        // ハラミ足ではなかった場合
-
-        // レンジ確定
-        lowOfRange = comparativeLow;
-        is_confirmed = true;
+        // ハラミ足
+        is_confirmed = false;
       }
-    } else {
-      // 安値を更新した場合
-
-      // トレンド維持
-      is_confirmed = false;
-      comparativeHigh = previous_high;
-      comparativeLow = previous_low;
     }
-  } else {
-    Print("！！！is_range_confirmed: fucked up!!!");
+  } else if(currentDirectionOfBreakout == "both"){
+    // current~~がbothのとき、この関数は実行されないはず
+    Print("！！！is_range_confirmed: Logic's fucked up!!!");
   }
 
   return is_confirmed;
@@ -272,10 +272,9 @@ void find_and_save_turning_point()
     lowOfRange = find_last_low();
   } else if(currentDirectionOfBreakout == "below") {
     highOfRange = find_last_high();
-  } else {
-    Print("！！！find_and_save_turning_point: fucked up!!!");
-    // currentDirectionOfBreakout == "both"
-    // 高値・安値を直前の足と一致させる
+  } else if(currentDirectionOfBreakout == "both") {
+    // current~~がbothのとき、この関数は実行されないはず
+    Print("！！！find_and_save_turning_point: Logic's fucked up!!!");
   }
 }
 
@@ -285,18 +284,33 @@ void find_and_save_turning_point()
 double find_last_high()
 {
   double last_high;
-  // ↓レンジブレイクした足の高値
-  double previous_bar_high = iHigh(Symbol(),Period(), 1);
+  // ↓レンジブレイクした足
+  double high = iHigh(Symbol(),Period(), 1);
+  double low = iLow(Symbol(),Period(), 1);
   bool is_found = false;
-  double high;
+  double previous_bar_high;
+  double previous_bar_low;
+
   for(int i = 2; !is_found; i++){
-    high = iHigh(Symbol(),Period(), i);
-    if(high > previous_bar_high){
-      previous_bar_high = high;
+    previous_bar_high = iHigh(Symbol(),Period(), i);
+    previous_bar_low = iLow(Symbol(),Period(), i);
+
+    if(previous_bar_high > high){
+      // 高値更新
+      high = previous_bar_high;
+      low = previous_bar_low;
+      is_found = false;
     } else {
-      // high == previous_bar_highの場合も強い壁があるという判断
-      last_high = previous_bar_high;
-      is_found = true;
+      // 高値が更新されなかった場合
+
+      if (previous_bar_low < low) {
+        // 安値更新
+        last_high = high;
+        is_found = true;
+      } else {
+        // はらみ足
+        is_found = false;
+      }
     }
   }
 
@@ -306,18 +320,33 @@ double find_last_high()
 double find_last_low()
 {
   double last_low;
-  // ↓レンジブレイクした足の安値
-  double previous_bar_low = iLow(Symbol(),Period(), 1);
+  // ↓レンジブレイクした足
+  double high = iHigh(Symbol(),Period(), 1);
+  double low = iLow(Symbol(),Period(), 1);
   bool is_found = false;
-  double low;
+  double previous_bar_high;
+  double previous_bar_low;
+
   for(int i = 2; !is_found; i++){
-    low = iLow(Symbol(),Period(), i);
-    if(low < previous_bar_low){
-      previous_bar_low = low;
+    previous_bar_high = iHigh(Symbol(),Period(), i);
+    previous_bar_low = iLow(Symbol(),Period(), i);
+
+    if(previous_bar_low < low){
+      // 安値更新
+      high = previous_bar_high;
+      low = previous_bar_low;
+      is_found = false;
     } else {
-      // low == previous_bar_lowの場合も強い壁があるという判断
-      last_low = previous_bar_low;
-      is_found = true;
+      // 安値が更新されなかった場合
+
+      if (previous_bar_high > high) {
+        // 高値更新
+        last_low = low;
+        is_found = true;
+      } else {
+        // はらみ足
+        is_found = false;
+      }
     }
   }
 
@@ -419,9 +448,11 @@ void update_all_stop_loss()
     } else if(type == POSITION_TYPE_SELL && currentDirectionOfBreakout == "below")  {
       sl = highOfRange + point;
       request.sl = NormalizeDouble(sl, digits);
-    } else {
+    } else if(currentDirectionOfBreakout == "both")  {
+      // current~~がbothのときだと考えられるが、この関数は実行されないはず
+
       // レンジをどちらにも抜けたらミスマッチする
-      Print("★update_all_stop_loss: type was mismatched!!! ");
+      Print("★update_all_stop_loss: Logic's fucked up!!! ");
       Print("type(0=buy, 1=sell): ", type);
       Print("currentDirection: ", currentDirectionOfBreakout);
     }
@@ -457,7 +488,7 @@ void cancel_opposite_order()
     // 残留した未決注文をキャンセル
     if(!OrderSend(request,result)){
       print_error_of_send_order("cancel_opposite_order");
-      // result.retcodeが10018のとき、再試行したい
+      // result.retcodeが10018のとき、再試行したいため
       if(result.retcode == 10018) isRetcodeMarketClosed = true;
     }
   }
@@ -478,8 +509,9 @@ void close_opposite_positions()
   } else if(previousDirectionOfBreakout == "below")
   {
     type_of_position_closing = POSITION_TYPE_BUY;
-  } else {
-    Print("★close_opposite_positions: previousDirectionOfBreakout was wrong!!! ");
+  } else if(previousDirectionOfBreakout == "both") {
+    // previous~~がbothのときはこの関数は実行されないはず
+    Print("★close_opposite_positions: Logic's fucked up!!! ");
   }
 
   int total = PositionsTotal();
@@ -492,6 +524,48 @@ void close_opposite_positions()
     ENUM_POSITION_TYPE type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
     if(type != type_of_position_closing) continue; // type一致しない場合、削除対象のポジションではないためスキップ
 
+    string position_symbol = PositionGetString(POSITION_SYMBOL);
+    double volume = PositionGetDouble(POSITION_VOLUME);
+    ZeroMemory(request);
+    ZeroMemory(result);
+    request.action = TRADE_ACTION_DEAL;
+    request.position = position_ticket;
+    request.symbol = position_symbol;
+    request.volume = volume;
+    request.deviation = 10; // 最大許容偏差＝スリッページ（値はポイント）
+    request.magic = expertMagic;
+    // int fillType = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
+    request.type_filling = 1;
+    //--- ポジションタイプによる注文タイプと価格の設定
+    if(type == POSITION_TYPE_BUY)
+    {
+      request.price = SymbolInfoDouble(position_symbol, SYMBOL_BID);
+      request.type = ORDER_TYPE_SELL;
+    } else {
+      request.price = SymbolInfoDouble(position_symbol, SYMBOL_ASK);
+      request.type = ORDER_TYPE_BUY;
+    }
+    // 決済
+    if(!OrderSend(request,result)){
+      print_error_of_send_order("close_opposite_positions");
+      if(result.retcode == 10030){
+        Print("request.type_filling: ", request.type_filling);
+      }
+    }
+    // fillされたときに、残りのポジションを再度closeする。（retcodeでfillポリシーが適用されたか確認する？）
+  }
+}
+
+void close_all_positions()
+{
+  int total = PositionsTotal();
+  for(int i = total - 1; i >= 0; i--)
+  {
+    ulong position_ticket = PositionGetTicket(i);
+    ulong magic = PositionGetInteger(POSITION_MAGIC);
+    if(magic != expertMagic) continue; // MagicNumberが一致していない場合スキップ
+
+    ENUM_POSITION_TYPE type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
     string position_symbol = PositionGetString(POSITION_SYMBOL);
     double volume = PositionGetDouble(POSITION_VOLUME);
     ZeroMemory(request);

@@ -274,6 +274,8 @@ void find_and_save_turning_point()
     highOfRange = find_last_high();
   } else {
     Print("！！！find_and_save_turning_point: fucked up!!!");
+    // currentDirectionOfBreakout == "both"
+    // 高値・安値を直前の足と一致させる
   }
 }
 
@@ -285,16 +287,16 @@ double find_last_high()
   double last_high;
   // ↓レンジブレイクした足の高値
   double previous_bar_high = iHigh(Symbol(),Period(), 1);
-  bool is_not_found = true;
+  bool is_found = false;
   double high;
-  for(int i = 2; is_not_found; i++){
+  for(int i = 2; !is_found; i++){
     high = iHigh(Symbol(),Period(), i);
     if(high > previous_bar_high){
       previous_bar_high = high;
     } else {
       // high == previous_bar_highの場合も強い壁があるという判断
       last_high = previous_bar_high;
-      is_not_found = false;
+      is_found = true;
     }
   }
 
@@ -306,16 +308,16 @@ double find_last_low()
   double last_low;
   // ↓レンジブレイクした足の安値
   double previous_bar_low = iLow(Symbol(),Period(), 1);
-  bool is_not_found = true;
+  bool is_found = false;
   double low;
-  for(int i = 2; is_not_found; i++){
+  for(int i = 2; !is_found; i++){
     low = iLow(Symbol(),Period(), i);
     if(low < previous_bar_low){
       previous_bar_low = low;
     } else {
       // low == previous_bar_lowの場合も強い壁があるという判断
       last_low = previous_bar_low;
-      is_not_found = false;
+      is_found = true;
     }
   }
 
@@ -437,7 +439,6 @@ void update_all_stop_loss()
   }
 }
 
-// TODO: 10018 TRADE_RETCODE_MARKET_CLOSED (市場が閉鎖中。)
 void cancel_opposite_order()
 {
   int same_magic_count = 0;
@@ -468,8 +469,6 @@ void cancel_opposite_order()
   }
 }
 
-// ✅10030 TRADE_RETCODE_INVALID_FILL (無効な注文充填タイプ。)
-// TODO: 10018 TRADE_RETCODE_MARKET_CLOSED (市場が閉鎖中。)
 void close_opposite_positions()
 {
   ENUM_POSITION_TYPE type_of_position_closing;

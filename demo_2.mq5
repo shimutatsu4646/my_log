@@ -70,11 +70,20 @@ int OnInit()
 // リファクタリング：グローバル変数の更新はOnTick内のみとするべき。
 void OnTick()
 {
-  // トレンドブレイク中は例外。方向感なくなったときを監視するため
-    // ↑ 少なくとも抱き足が確定した瞬間に決済する場合の話
-  datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0); // 現在のバーのオープン時間を取得
-  if (currentBarTime == lastBarTime) return; // 足が確定するまではリターン
-  lastBarTime = currentBarTime; // 最後のバー時間を更新
+  if(!isRetcodeMarketClosed){
+
+    // トレンドブレイク中は例外。方向感なくなったときを監視するため
+      // ↑ 少なくとも抱き足が確定した瞬間に決済する場合の話
+    datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0); // 現在のバーのオープン時間を取得
+    if (currentBarTime == lastBarTime) return; // 足が確定するまではリターン
+    lastBarTime = currentBarTime; // 最後のバー時間を更新
+
+  } else {
+    datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
+    if(currentBarTime == lastBarTime) {
+      lastBarTime = currentBarTime;
+    }
+  }
 
   ZeroMemory(request);
   ZeroMemory(result);
@@ -95,10 +104,10 @@ void OnTick()
       // 前回のブレイク方向とは逆側にブレイクした場合
       if(previousDirectionOfBreakout != "both" && previousDirectionOfBreakout != currentDirectionOfBreakout) {
         close_opposite_positions();
-        pyramidingCount = 0;
+        // pyramidingCount = 0;
       } else {
         // 前回が両方へのブレイクだった or 同方向にブレイクした場合
-        pyramidingCount += 1;
+        // pyramidingCount += 1;
       }
 
       // 転換点を導出し、grobal変数に格納
@@ -113,7 +122,8 @@ void OnTick()
 
       // ポジション全決済の処理
       close_all_positions();
-      pyramidingCount = 0;
+      // if (isRetcodeMarketClosed) return;
+      // pyramidingCount = 0;
       // レンジブレイクした足自体が新しいレンジとなる
       isInRange = true;
     }
@@ -132,11 +142,14 @@ void OnTick()
       // comparativeHigh
       // comparativeLow
       // ↓ここで押し安値・戻り高値に代入してはいけない！
-    if(!is_range_confirmed()) return;
+    if(!isRetcodeMarketClosed && !is_range_confirmed()) return;
+    isRetcodeMarketClosed = false;
 
-    // ⑥：新規の逆指値注文をレンジBの上下に入れる。
-      // 位置や損切りは②と同じ
+    // 逆指値注文をレンジの上下にいれる
+    // 市場閉鎖エラーが発生した場合、isRetcodeMarketClosedをtrueにする
     send_order_both_stop_buy_and_stop_sell();
+    if (isRetcodeMarketClosed) return;
+
     isInRange = true; // レンジが確定したためレンジ内である
     return;
   }
@@ -175,6 +188,9 @@ bool is_range_broken()
     // この足がレンジになる
     highOfRange = latest_bar_high;
     lowOfRange = latest_bar_low;
+    Print("★レンジをどちらにも抜けた");
+    Print("★レンジ上限： ", highOfRange);
+    Print("★レンジ下限： ", lowOfRange);
   }
 
   if(is_updated == false && latest_bar_high > highOfRange){
@@ -228,6 +244,9 @@ bool is_range_confirmed()
         // 安値更新
         highOfRange = comparativeHigh;
         is_confirmed = true;
+        Print("★レンジ確定");
+        Print("レンジ上限： ", highOfRange);
+        Print("レンジ下限（既出）： ", lowOfRange);
       } else {
         // ハラミ足
         is_confirmed = false;
@@ -248,6 +267,9 @@ bool is_range_confirmed()
         // 高値更新
         lowOfRange = comparativeLow;
         is_confirmed = true;
+        Print("★レンジ確定");
+        Print("レンジ下限： ", lowOfRange);
+        Print("レンジ上限（既出）： ", highOfRange);
       } else {
         // ハラミ足
         is_confirmed = false;
@@ -270,8 +292,12 @@ void find_and_save_turning_point()
 {
   if(currentDirectionOfBreakout == "above"){
     lowOfRange = find_last_low();
+    Print("★レンジを上に抜けた");
+    Print("★レンジ下限： ", lowOfRange);
   } else if(currentDirectionOfBreakout == "below") {
     highOfRange = find_last_high();
+    Print("★レンジを下に抜けた");
+    Print("★レンジ上限： ", highOfRange);
   } else if(currentDirectionOfBreakout == "both") {
     // current~~がbothのとき、この関数は実行されないはず
     Print("！！！find_and_save_turning_point: Logic's fucked up!!!");
@@ -386,9 +412,8 @@ void send_order_both_stop_buy_and_stop_sell()
   request.volume = volume_with_risk_manegemant();
   if(!OrderSend(request,result)){
     print_error_of_send_order("buy_stop");
-    Print("request.price: ", request.price);
-    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-    Print("current ask price: ", ask);
+    // result.retcodeが10018のとき、再試行したいため
+    if(result.retcode == 10018) isRetcodeMarketClosed = true;
   }
   // print_information_of_send_error("buy_stop");
 
@@ -401,9 +426,8 @@ void send_order_both_stop_buy_and_stop_sell()
   request.sl = NormalizeDouble(sl, digits); // 正規化された損切り価格
   if(!OrderSend(request,result)){
     print_error_of_send_order("sell_stop");
-    Print("request.price: ", request.price);
-    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-    Print("current bid price: ", bid);
+    // result.retcodeが10018のとき、再試行したいため
+    if(result.retcode == 10018) isRetcodeMarketClosed = true;
   }
 }
 

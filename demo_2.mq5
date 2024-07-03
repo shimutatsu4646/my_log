@@ -335,7 +335,10 @@ double find_last_high()
         is_found = true;
       } else {
         // はらみ足
-        is_found = false;
+
+        // 抱き足の安値を直近安値とする
+        lowOfRange = low;
+        is_found = true;
       }
     }
   }
@@ -371,7 +374,10 @@ double find_last_low()
         is_found = true;
       } else {
         // はらみ足
-        is_found = false;
+
+        // 抱き足の高値を直近高値とする
+        highOfRange = high;
+        is_found = true;
       }
     }
   }

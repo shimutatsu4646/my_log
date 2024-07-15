@@ -852,8 +852,8 @@ double volume_with_risk_manegemant()
   // Print("amount_currency_of_one_lot", amount_currency_of_one_lot);
   // Print("before volume", volume);
 
-  // CHECK: SYMBOL_TRADE_CONTRACT_SIZEが実際のロット数と一致しないケースあり。以下は暫定対応
-  volume = verify_volume(volume * 100);
+  // CHECK: SYMBOL_TRADE_CONTRACT_SIZEが実際のロット数と一致しないケースあり。
+  volume = verify_volume(volume);
   // Print("after volume", volume);
   return volume;
 }

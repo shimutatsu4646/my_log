@@ -77,6 +77,7 @@ void OnTick()
     datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0); // 現在のバーのオープン時間を取得
     if (currentBarTime == lastBarTime) return; // 足が確定するまではリターン
     lastBarTime = currentBarTime; // 最後のバー時間を更新
+    check_effective_leverage();
 
   } else {
     datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
@@ -791,10 +792,13 @@ double volume_with_risk_manegemant()
   // 証拠金に対する損失額の割合（X %）
   // ピラミッディングの回数でrateを変える
   double rate = rate_by_count_of_pyramiding();
-  // 証拠金;
-  double margin = AccountInfoDouble(ACCOUNT_BALANCE);
+  // 有効証拠金
+  double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+  // long leverage = AccountInfoInteger(ACCOUNT_LEVERAGE);
+  // double effective_equity = equity * leverage;
   // 許容損失額
-  double loss_amount = margin * (rate / 100);
+  double loss_amount = equity * (rate / 100);
+  // double loss_amount = effective_equity * (rate / 100);
   loss_amount = NormalizeDouble(loss_amount, digits);
 
   double price = request.price;
@@ -804,6 +808,9 @@ double volume_with_risk_manegemant()
   loss_extent = NormalizeDouble(loss_extent, digits);
   // ポジションサイズ
   double position_size = loss_amount / loss_extent;
+  // Print("loss_amount", loss_amount);
+  // Print("loss_extent", loss_extent);
+  // Print("position_size", position_size);
 
   // 通貨ペアのうちの決済通貨を抽出
   string symbol = Symbol();
@@ -842,7 +849,12 @@ double volume_with_risk_manegemant()
 
   double amount_currency_of_one_lot = SymbolInfoDouble(symbol, SYMBOL_TRADE_CONTRACT_SIZE);
   double volume = position_size / amount_currency_of_one_lot;
-  volume = verify_volume(volume);
+  // Print("amount_currency_of_one_lot", amount_currency_of_one_lot);
+  // Print("before volume", volume);
+
+  // CHECK: SYMBOL_TRADE_CONTRACT_SIZEが実際のロット数と一致しないケースあり。以下は暫定対応
+  volume = verify_volume(volume * 100);
+  // Print("after volume", volume);
   return volume;
 }
 
@@ -881,26 +893,52 @@ double rate_by_count_of_pyramiding() // doubleでいいのか？
   switch (pyramidingCount)
   {
     case 0:
-      rate = 1.0;
+      rate = 5.0;
       break;
-    case 1:
-      rate = 0.85;
-      break;
-    case 2:
-      rate = 0.7;
-      break;
-    case 3:
-      rate = 0.55;
-      break;
-    case 4:
-      rate = 0.4;
-      break;
+    // case 1:
+    //   rate = 5.0;
+    //   break;
+    // case 2:
+    //   rate = 5.0;
+    //   break;
+    // case 3:
+    //   rate = 4.0;
+    //   break;
+    // case 4:
+    //   rate = 4.0;
+    //   break;
     default:
-      rate = 0.25;
+      rate = 5.0;
       break;
   }
 
   return rate;
+}
+
+void check_effective_leverage()
+{
+  double totalTradeAmount = 0.0;
+  int totalPositions = PositionsTotal();
+  double amount_currency_of_one_lot = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_CONTRACT_SIZE);
+
+  for(int i = 0; i < totalPositions; i++)
+  {
+    ulong position_ticket = PositionGetTicket(i);
+    Print("ポジションチケット: ", position_ticket);
+    double volume = PositionGetDouble(POSITION_VOLUME);
+    Print("ロット: ", volume);
+    double price = PositionGetDouble(POSITION_PRICE_OPEN);
+    Print("値段: ", price);
+    totalTradeAmount += volume * amount_currency_of_one_lot  * price;
+  }
+  Print("総取引金額", totalTradeAmount);
+
+  double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+  double effective_leverage = totalTradeAmount / equity;
+  Print("実効レバレッジ: ",  effective_leverage);
+  if (effective_leverage >= 10){
+    Print("！！！！！実効レバレッジが10倍以上！！！！！");
+  }
 }
 
 // ==============================================================================================

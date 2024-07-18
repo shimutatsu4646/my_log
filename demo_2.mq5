@@ -63,6 +63,9 @@ int OnInit()
   lastBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
   isRetcodeMarketClosed = false;
   // fillType = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
+  LineCreate("high");
+  LineCreate("low");
+  ChartRedraw();
   return(INIT_SUCCEEDED);
 }
 
@@ -192,6 +195,9 @@ bool is_range_broken()
     Print("★レンジをどちらにも抜けた");
     Print("★レンジ上限： ", highOfRange);
     Print("★レンジ下限： ", lowOfRange);
+    LineMove("high");
+    LineMove("low");
+    ChartRedraw();
   }
 
   if(is_updated == false && latest_bar_high > highOfRange){
@@ -248,6 +254,8 @@ bool is_range_confirmed()
         Print("★レンジ確定");
         Print("レンジ上限： ", highOfRange);
         Print("レンジ下限（既出）： ", lowOfRange);
+        LineMove("high");
+        ChartRedraw();
       } else {
         // ハラミ足
         is_confirmed = false;
@@ -271,6 +279,8 @@ bool is_range_confirmed()
         Print("★レンジ確定");
         Print("レンジ下限： ", lowOfRange);
         Print("レンジ上限（既出）： ", highOfRange);
+        LineMove("low");
+        ChartRedraw();
       } else {
         // ハラミ足
         is_confirmed = false;
@@ -295,10 +305,14 @@ void find_and_save_turning_point()
     lowOfRange = find_last_low();
     Print("★レンジを上に抜けた");
     Print("★レンジ下限： ", lowOfRange);
+    LineMove("low");
+    ChartRedraw();
   } else if(currentDirectionOfBreakout == "below") {
     highOfRange = find_last_high();
     Print("★レンジを下に抜けた");
     Print("★レンジ上限： ", highOfRange);
+    LineMove("high");
+    ChartRedraw();
   } else if(currentDirectionOfBreakout == "both") {
     // current~~がbothのとき、この関数は実行されないはず
     Print("！！！find_and_save_turning_point: Logic's fucked up!!!");
@@ -941,3 +955,117 @@ void check_effective_leverage()
 
 // ==============================================================================================
 // ==============================================================================================
+
+//+------------------------------------------------------------------+
+//| 水平線を作成する                                                     |
+//+------------------------------------------------------------------+
+bool LineCreate(string range)
+{
+
+  // デフォルト値を設定
+  long chart_ID = 0; // チャート識別子
+  int sub_window = 0; // サブウィンドウ番号
+  string name; // 線の名称
+  double price; // 線の価格
+  if (range == "high") {
+    name = "HighLine";
+    price = highOfRange;
+  } else {
+    name = "LowLine";
+    price = lowOfRange;
+  }
+  color clr = clrHotPink; // 線の色
+  ENUM_LINE_STYLE style = STYLE_SOLID; // 線のスタイル
+  int width = 1; // 線の幅
+  bool back = false; // 背景で表示する
+  bool selection = true; // 強調表示して移動
+  bool hidden = true; // オブジェクトリストに隠す
+  long z_order = 0; // マウスクリックの優先順位
+
+//--- エラー値をリセットする
+  ResetLastError();
+//--- 水平線を作成する
+  if(!ObjectCreate(chart_ID, name, OBJ_HLINE, sub_window, 0, price))
+    {
+    Print(__FUNCTION__,
+          ": failed to create a horizontal line! Error code = ",GetLastError());
+    return(false);
+    }
+//--- 線の色を設定する
+  ObjectSetInteger(chart_ID,name,OBJPROP_COLOR,clr);
+//--- 線の表示スタイルを設定する
+  ObjectSetInteger(chart_ID,name,OBJPROP_STYLE,style);
+//--- 線の幅を設定する
+  ObjectSetInteger(chart_ID,name,OBJPROP_WIDTH,width);
+//--- 前景（false）または背景（true）に表示
+  ObjectSetInteger(chart_ID,name,OBJPROP_BACK,back);
+//--- マウスで線を移動させるモードを有効（true）か無効（false）にする
+//--- ObjectCreate 関数を使用してグラフィックオブジェクトを作成する際、オブジェクトは
+//--- デフォルトではハイライトされたり動かされたり出来ない。このメソッド内では、選択パラメータは
+//--- デフォルトでは true でハイライトと移動を可能にする。
+  ObjectSetInteger(chart_ID,name,OBJPROP_SELECTABLE,selection);
+  ObjectSetInteger(chart_ID,name,OBJPROP_SELECTED,selection);
+//--- オブジェクトリストのグラフィックオブジェクトを非表示（true）か表示（false）にする
+  ObjectSetInteger(chart_ID,name,OBJPROP_HIDDEN,hidden);
+//--- チャートのマウスクリックのイベントを受信するための優先順位を設定する
+  ObjectSetInteger(chart_ID,name,OBJPROP_ZORDER,z_order);
+//--- 実行成功
+  return(true);
+}
+
+
+//+------------------------------------------------------------------+
+//| 水平線を移動する                                                     |
+//+------------------------------------------------------------------+
+bool LineMove(string range)
+{
+
+  long chart_ID = 0;   // チャート識別子
+  string name; // 線の名称
+  double price; // 線の価格
+  if (range == "high") {
+    name = "HighLine";
+    price = highOfRange;
+  } else {
+    name = "LowLine";
+    price = lowOfRange;
+  }
+
+//--- エラー値をリセットする
+  ResetLastError();
+//--- 水平線を移動する
+  if(!ObjectMove(chart_ID, name, 0, 0, price))
+    {
+    Print(__FUNCTION__,
+          ": failed to move the horizontal line! Error code = ",GetLastError());
+    return(false);
+    }
+//--- 実行成功
+  return(true);
+}
+
+//+------------------------------------------------------------------+
+//| 水平線を削除する （いらないかも）                                |
+//+------------------------------------------------------------------+
+bool LineDelete(string range)
+{
+  long chart_ID = 0;   // チャート識別子
+  string name;
+
+  if (range == "high") {
+    name = "HighLine";
+  } else {
+    name = "LowLine";
+  }
+//--- エラー値をリセットする
+  ResetLastError();
+//--- 水平線を削除する
+  if(!ObjectDelete(chart_ID, name))
+    {
+    Print(__FUNCTION__,
+          ": failed to delete a horizontal line! Error code = ",GetLastError());
+    return(false);
+    }
+//--- 実行成功
+  return(true);
+}

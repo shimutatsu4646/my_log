@@ -32,7 +32,10 @@ input string current_direction_of_breakout; // [current] below=下抜け、avobe
 input string previous_direction_of_breakout; // [previous] below=下抜け、avobe=上抜け
 
 input ulong expertMagic = 10;
+
+input double additional_deviation = 10.0; // 壁をどれだけズラすか。（1 = 1ポイント。最小単位）
 // global variables
+double additionalDeviation; // 壁の偏差
 double highOfRange; // 高値
 double lowOfRange; // 安値
 string currentDirectionOfBreakout;
@@ -51,8 +54,10 @@ bool isRetcodeMarketClosed;
 
 int OnInit()
 {
-  highOfRange = high;
-  lowOfRange = low;
+  additionalDeviation = additional_deviation * Point();
+  Print("★★★additonalDeviation: ", additionalDeviation);
+  highOfRange = high + additionalDeviation;
+  lowOfRange = low - additionalDeviation;
   currentDirectionOfBreakout = current_direction_of_breakout;
   previousDirectionOfBreakout = previous_direction_of_breakout;
   pyramidingCount = 0;
@@ -190,8 +195,8 @@ bool is_range_broken()
     comparativeHigh = latest_bar_high;
     comparativeLow = latest_bar_low;
     // この足がレンジになる
-    highOfRange = latest_bar_high;
-    lowOfRange = latest_bar_low;
+    highOfRange = latest_bar_high + additionalDeviation;
+    lowOfRange = latest_bar_low - additionalDeviation;
     Print("★レンジをどちらにも抜けた");
     Print("★レンジ上限： ", highOfRange);
     Print("★レンジ下限： ", lowOfRange);
@@ -249,7 +254,7 @@ bool is_range_confirmed()
 
       if (latest_bar_low < comparativeLow) {
         // 安値更新
-        highOfRange = comparativeHigh;
+        highOfRange = comparativeHigh + additionalDeviation;
         is_confirmed = true;
         Print("★レンジ確定");
         Print("レンジ上限： ", highOfRange);
@@ -274,7 +279,7 @@ bool is_range_confirmed()
 
       if (latest_bar_high > comparativeHigh) {
         // 高値更新
-        lowOfRange = comparativeLow;
+        lowOfRange = comparativeLow - additionalDeviation;
         is_confirmed = true;
         Print("★レンジ確定");
         Print("レンジ下限： ", lowOfRange);
@@ -302,13 +307,13 @@ bool is_range_confirmed()
 void find_and_save_turning_point()
 {
   if(currentDirectionOfBreakout == "above"){
-    lowOfRange = find_last_low();
+    lowOfRange = find_last_low() - additionalDeviation;
     Print("★レンジを上に抜けた");
     Print("★レンジ下限： ", lowOfRange);
     LineMove("low");
     ChartRedraw();
   } else if(currentDirectionOfBreakout == "below") {
-    highOfRange = find_last_high();
+    highOfRange = find_last_high() + additionalDeviation;
     Print("★レンジを下に抜けた");
     Print("★レンジ上限： ", highOfRange);
     LineMove("high");
@@ -952,6 +957,13 @@ void check_effective_leverage()
     Print("！！！！！実効レバレッジが10倍以上！！！！！");
   }
 }
+
+
+// TODO:「 壁をどれくらいズラすか」を計算する関数の実装。
+  // 壁の厚さ・スプレッド・流動性を元に計算
+
+// void cal_additional_deviation()
+
 
 // ==============================================================================================
 // ==============================================================================================

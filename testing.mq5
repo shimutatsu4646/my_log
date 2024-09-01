@@ -4,20 +4,6 @@
 //|                                             https://www.mql5.com |
 //+------------------------------------------------------------------+
 
-// ロジック：
-// 戻り高値導出：
-  // 過去に1個ずつ遡っていって、
-  // 高値が更新されなくなったら
-  // その手前の足の高値が戻り高値。
-// 押し安値導出：
-  // 過去に1個ずつ遡っていって、
-  // 安値が更新されなくなったら
-  // その手前の足の安値が押し安値。
-
-// レンジ相場かトレンド継続か：
-  // どちらかの条件が満たされていない場合(はらみ足・包み足)に一旦レンジ相場に突入という判断
-  // 抱き足：その足の高値安値がレンジの壁になる
-
 #property copyright "Copyright 2023, MetaQuotes Ltd."
 #property link      "https://www.mql5.com"
 #property version   "1.00"
@@ -40,7 +26,6 @@ double lowOfRange; // 安値
 string currentDirectionOfBreakout;
 string previousDirectionOfBreakout;
 bool isInRange;
-int pyramidingCount;
 double comparativeHigh; // ブレイク中の比較対象の足の高値
 double comparativeLow; // ブレイク中の比較対象の足の安値
 datetime lastBarTime; // 最後に確認したバーの時間を格納する変数
@@ -57,7 +42,6 @@ int OnInit()
   lowOfRange = low;
   currentDirectionOfBreakout = current_direction_of_breakout;
   previousDirectionOfBreakout = previous_direction_of_breakout;
-  pyramidingCount = 0;
   send_order_both_stop_buy_and_stop_sell();
   isInRange = true;
   comparativeHigh = 0.0;
@@ -71,123 +55,77 @@ int OnInit()
   return(INIT_SUCCEEDED);
 }
 
-
-// リファクタリング：グローバル変数の更新はOnTick内のみとするべき。
 void OnTick()
 {
   if(!isRetcodeMarketClosed){
+    datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
+    if (currentBarTime == lastBarTime) return;
 
-    // トレンドブレイク中は例外。方向感なくなったときを監視するため
-      // ↑ 少なくとも抱き足が確定した瞬間に決済する場合の話
-    datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0); // 現在のバーのオープン時間を取得
-    if (currentBarTime == lastBarTime) return; // 足が確定するまではリターン
-    lastBarTime = currentBarTime; // 最後のバー時間を更新
+    lastBarTime = currentBarTime;
     check_effective_leverage();
-
   } else {
     datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
-    if(currentBarTime == lastBarTime) {
+    if(currentBarTime != lastBarTime) {
       lastBarTime = currentBarTime;
     }
+
+    // 下記のロジックにするべきだと思うのだが、利益が著しく低下した。
+      // <仮説>
+      // レンジブレイクした足が包み線だった場合に、is_range_confirmedで即レンジ化できる。しかも注文が追加される。そもそもレンジブレイクしているわけだから、同じ方向に抜けやすくなっている。そのため利益増加していると考えられる。
+       // ↑だとしたら、is_range_brokeのロジックも改良するべきかもしれない。つまり、レンジブレイクした足自体が包み足だった場合、その足をレンジにしちゃう。（注意：限定的な相場で収益増加している可能性あり）
   }
 
   ZeroMemory(request);
   ZeroMemory(result);
 
   if(isInRange){
-    // レンジブレイクしていなければ終了
-
-    // retcode 10018(市場閉鎖)フラグがtrueの場合、is_range_brokenチェックをスキップ
     if (!isRetcodeMarketClosed && !is_range_broken()) return;
-    isRetcodeMarketClosed = false;
 
+    isRetcodeMarketClosed = false;
     if(currentDirectionOfBreakout != "both"){
-      // 残留している逆指値注文をキャンセル
-      // 市場閉鎖エラーが発生した場合、isRetcodeMarketClosedをtrueにする
+      // 市場閉鎖エラーが発生した場合、isRetcodeMarketClosedをtrueにするロジックを含む↓
       cancel_opposite_order();
       if (isRetcodeMarketClosed) return;
 
-      // 前回のブレイク方向とは逆側にブレイクした場合
-      if(previousDirectionOfBreakout != "both" && previousDirectionOfBreakout != currentDirectionOfBreakout) {
-
-        // if (should_fix_range()){
-        //   fix_range(); // 高値安値の修正。前の高値安値を格納しておく必要がある。
-        //   close_all_positions();
-        //   send_order_both_stop_buy_and_stop_sell();
-        //   isInRange = true;
-        // }
-
+      if(previousDirectionOfBreakout != "both" && previousDirectionOfBreakout != currentDirectionOfBreakout)
+      {
+        // 前回のブレイク方向とは逆側にブレイクした場合
         close_opposite_positions();
-        // pyramidingCount = 0;
-      } else {
-        // 前回が両方へのブレイクだった or 同方向にブレイクした場合
-        // pyramidingCount += 1;
       }
 
-      // 転換点を導出し、grobal変数に格納
       find_and_save_turning_point();
-      // ⑦：全てのポジションの損切り注文を更新する
       update_all_stop_loss();
-      // レンジブレイクしたためレンジ内ではない
       isInRange = false;
-
     } else {
-      // current~~がbothだった場合
-
-      // ポジション全決済の処理
+      // currentDirectionOfBreakout == both
+      // TODO: cancel_opposite_orderと同じく市場エラー発生するかも
       close_all_positions();
       // if (isRetcodeMarketClosed) return;
-      // pyramidingCount = 0;
-      // レンジブレイクした足自体が新しいレンジとなる
+
+      // レンジブレイクした足自体が新しいレンジとなるためレンジ内
       isInRange = true;
     }
-
-    return;
+    // return; // TODO: ワンチャンreturnしないほうが良いかも。上の方のクソデカコメントの内容を達成する可能性あり
   }
 
   if(!isInRange){
-    // ④：天井or底が確定するのを待つ(更新が終わるのを待つ)
-      // 更新されていたら（＝レンジが確定していないなら）：終了
-      // 更新されなかったら（レンジが確定したなら）：再度レンジ導出(B)
-
-    // リファクタリング
-      // highOfRange
-      // lowOfRange
-      // comparativeHigh
-      // comparativeLow
-      // ↓ここで押し安値・戻り高値に代入してはいけない！
     if(!isRetcodeMarketClosed && !is_range_confirmed()) return;
-    isRetcodeMarketClosed = false;
 
-    // 逆指値注文をレンジの上下にいれる
-    // 市場閉鎖エラーが発生した場合、isRetcodeMarketClosedをtrueにする
+    isRetcodeMarketClosed = false;
+    // 市場閉鎖エラーが発生した場合、isRetcodeMarketClosedをtrueにするロジックを含む↓
     send_order_both_stop_buy_and_stop_sell();
     if (isRetcodeMarketClosed) return;
 
-    isInRange = true; // レンジが確定したためレンジ内である
-    return;
+    isInRange = true;
   }
 }
-
-// ==============================================================================================
-// ==============================================================================================
 
 
 // ↓レンジ確認 =================================================================================
 
-
-// 値が格納されるglobal変数
-    // previousDirectionOfBreakout
-    // currentDirectionOfBreakout
-    // comparativeHigh
-    // comparativeLow
 bool is_range_broken()
 {
-  // 一旦、レンジの幅を超えてたらレンジブレイク確定というロジックにする。
-    // TODO: スリッページのせいで注文が執行されない問題が発生したら
-    // →注文が執行されていたらレンジブレイク確定というロジックに変更する。
-
-  // ↓現在進行系の足の一個前ということ→確定済みの足（最新）
+  // 確定済みの足（最新）
   double latest_bar_high = iHigh(Symbol(),Period(), 1);
   double latest_bar_low = iLow(Symbol(),Period(), 1);
   bool is_updated = false;
@@ -228,13 +166,6 @@ bool is_range_broken()
 
   return is_updated;
 }
-
-
-// 値が格納されるglobal変数
-    // 天井 | 底
-    // highOfRange | lowOfRange
-    // comparativeHigh
-    // comparativeLow
 
 // TODO: 条件の比較をboolean関数にする
 bool is_range_confirmed()
@@ -334,11 +265,6 @@ bool is_range_confirmed()
   return is_confirmed;
 }
 
-// 値が格納されるglobal変数
-    // 押し安値 | 戻り高値
-    // lowOfRange | highOfRange
-// TODO:
-// ★押し目安値・戻り高値：レンジ内における直前の安値・高値（レンジ内で一番高い・低いは関係ない。レンジ内の最後の均衡点が押し目・戻りになるというロジック）
 void find_and_save_turning_point()
 {
   if(currentDirectionOfBreakout == "above"){
@@ -359,9 +285,6 @@ void find_and_save_turning_point()
   }
 }
 
-// TODO: 色々な考え方がある。何を基準に高値を導出するか？
-  // 今回は「買い手と売り手の均衡点」という視点で導出
-  // 下がり続けている中で、最後に高値が上がったところが高値の限界点であるとする
 double find_last_high()
 {
   double last_high;
@@ -442,17 +365,13 @@ double find_last_low()
 // ==============================================================================================
 // ↓逆指値注文 =================================================================================
 
-// TODO: fix bug about return code 10015 :
-  // TRADE_RETCODE_INVALID_PRICE (リクエスト内の無効な価格。)
 void send_order_both_stop_buy_and_stop_sell()
 {
   ZeroMemory(request);
   ZeroMemory(result);
-  // ②：①の上限と下限に逆指値注文を置く
-    // 上限・下限を少し超えた位置にする
+  // レンジの上限・下限を少し超えた位置に逆指値注文を置く
     // 注文はそれぞれレンジの反対側で損切りするように設定する
 
-  //--- 操作パラメータの設定
   request.action = TRADE_ACTION_PENDING;
   request.symbol = Symbol();
   request.deviation = 10;
@@ -460,7 +379,7 @@ void send_order_both_stop_buy_and_stop_sell()
   double price;
   double sl;
   double point = Point();
-  int digits = Digits(); // 小数点以下の桁数（精度）
+  int digits = Digits();
 
   // buy_stop //--- 操作パラメータの設定
   request.type = ORDER_TYPE_BUY_STOP;
@@ -471,10 +390,9 @@ void send_order_both_stop_buy_and_stop_sell()
   request.volume = volume_with_risk_manegemant();
   if(!OrderSend(request,result)){
     print_error_of_send_order("buy_stop");
-    // result.retcodeが10018のとき、再試行したいため
+    // （市場閉鎖エラーの場合、再試行したいため
     if(result.retcode == 10018) isRetcodeMarketClosed = true;
   }
-  // print_information_of_send_error("buy_stop");
 
   // sell_stop //--- 操作パラメータの設定
   ZeroMemory(result); // requestは初期化せず使い回す
@@ -485,7 +403,7 @@ void send_order_both_stop_buy_and_stop_sell()
   request.sl = NormalizeDouble(sl, digits); // 正規化された損切り価格
   if(!OrderSend(request,result)){
     print_error_of_send_order("sell_stop");
-    // result.retcodeが10018のとき、再試行したいため
+    // 市場閉鎖エラーの場合、再試行したいため
     if(result.retcode == 10018) isRetcodeMarketClosed = true;
   }
 }
@@ -493,9 +411,6 @@ void send_order_both_stop_buy_and_stop_sell()
 // ==============================================================================================
 // ↓注文・ポジションの更新/キャンセル/決済 =====================================================
 
-// TODO: fix stop level
- // 10016 TRADE_RETCODE_INVALID_STOPS (リクエスト内の無効なストップ。)
- // →更新前のslとrequest.slが同じ値になっている（←これ目視で確認！！）
 void update_all_stop_loss()
 {
   ZeroMemory(request);
@@ -533,7 +448,6 @@ void update_all_stop_loss()
       request.sl = NormalizeDouble(sl, digits);
     } else if(currentDirectionOfBreakout == "both")  {
       // current~~がbothのときだと考えられるが、この関数は実行されないはず
-
       // レンジをどちらにも抜けたらミスマッチする
       Print("★update_all_stop_loss: Logic's fucked up!!! ");
       Print("type(0=buy, 1=sell): ", type);
@@ -617,6 +531,7 @@ void close_opposite_positions()
     request.volume = volume;
     request.deviation = 10; // 最大許容偏差＝スリッページ（値はポイント）
     request.magic = expertMagic;
+    // TODO: type_fillingの値を動的に変える。
     // int fillType = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
     request.type_filling = 1;
     //--- ポジションタイプによる注文タイプと価格の設定
@@ -842,8 +757,7 @@ double volume_with_risk_manegemant()
 
   int digits = Digits();
   // 証拠金に対する損失額の割合（X %）
-  // ピラミッディングの回数でrateを変える
-  double rate = rate_by_count_of_pyramiding();
+  double rate = 5.0;
   // 有効証拠金
   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
   // long leverage = AccountInfoInteger(ACCOUNT_LEVERAGE);
@@ -937,34 +851,6 @@ double verify_volume(double volume)
   }
 
 	return(tradeSize);
-}
-
-double rate_by_count_of_pyramiding() // doubleでいいのか？
-{
-  double rate;
-  switch (pyramidingCount)
-  {
-    case 0:
-      rate = 5.0;
-      break;
-    // case 1:
-    //   rate = 5.0;
-    //   break;
-    // case 2:
-    //   rate = 5.0;
-    //   break;
-    // case 3:
-    //   rate = 4.0;
-    //   break;
-    // case 4:
-    //   rate = 4.0;
-    //   break;
-    default:
-      rate = 5.0;
-      break;
-  }
-
-  return rate;
 }
 
 void check_effective_leverage()

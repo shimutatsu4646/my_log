@@ -4,6 +4,9 @@ bool is_range_broken()
   // 確定済みの足（最新）
   double latest_bar_high = iHigh(Symbol(),Period(), 1);
   double latest_bar_low = iLow(Symbol(),Period(), 1);
+  // 更に一つ前の確定済み足
+  double previous_bar_high = iHigh(Symbol(),Period(), 2);
+  double previous_bar_low = iLow(Symbol(),Period(), 2);
   bool is_updated = false;
 
   if(latest_bar_high > highOfRange && latest_bar_low < lowOfRange){
@@ -11,8 +14,8 @@ bool is_range_broken()
     is_updated = true;
     previousDirectionOfBreakout = currentDirectionOfBreakout;
     currentDirectionOfBreakout = "both";
-    comparativeHigh = latest_bar_high;
-    comparativeLow = latest_bar_low;
+    comparativeHigh = previous_bar_high;
+    comparativeLow = previous_bar_low;
     // この足がレンジになる
     highOfRange = latest_bar_high;
     lowOfRange = latest_bar_low;
@@ -28,16 +31,16 @@ bool is_range_broken()
     is_updated = true;
     previousDirectionOfBreakout = currentDirectionOfBreakout;
     currentDirectionOfBreakout = "above";
-    comparativeHigh = latest_bar_high;
-    comparativeLow = latest_bar_low;
+    comparativeHigh = previous_bar_high;
+    comparativeLow = previous_bar_low;
   }
 
   if(is_updated == false && latest_bar_low < lowOfRange){
     is_updated = true;
     previousDirectionOfBreakout = currentDirectionOfBreakout;
     currentDirectionOfBreakout = "below";
-    comparativeHigh = latest_bar_high;
-    comparativeLow = latest_bar_low;
+    comparativeHigh = previous_bar_high;
+    comparativeLow = previous_bar_low;
   }
 
   return is_updated;

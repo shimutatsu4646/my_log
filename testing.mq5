@@ -38,7 +38,7 @@ MqlTradeRequest request;
 MqlTradeResult result;
 // 市場閉鎖でSendOrderがエラー発生した場合true
 // cancel_opposite_orderでのみ発生している前提のロジックとなっている。
-bool isRetcodeMarketClosed;
+bool isMarketClosed;
 // int fillType;
 
 int OnInit()
@@ -52,7 +52,7 @@ int OnInit()
   comparativeHigh = 0.0;
   comparativeLow = 0.0;
   lastBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
-  isRetcodeMarketClosed = false;
+  isMarketClosed = false;
   // fillType = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
   LineCreate("high");
   LineCreate("low");
@@ -62,13 +62,15 @@ int OnInit()
 
 void OnTick()
 {
-  if(!isRetcodeMarketClosed){
+  if(!isMarketClosed){
     datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
     if (currentBarTime == lastBarTime) return;
 
     lastBarTime = currentBarTime;
     check_effective_leverage();
   } else {
+    // 市場閉鎖してても5分後くらいに開場される。
+    // 開場のタイミングで取引を再開したいため、onTickが発火するたびに処理を再実行する。→ 足が新しくなくてもreturnしない。
     datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
     if(currentBarTime != lastBarTime) {
       lastBarTime = currentBarTime;
@@ -79,42 +81,39 @@ void OnTick()
   ZeroMemory(result);
 
   if(isInRange){
-    if (!isRetcodeMarketClosed && !is_range_broken()) return;
+    if (!isMarketClosed && !is_range_broken()) return;
 
-    isRetcodeMarketClosed = false;
+    isMarketClosed = false;
     if(currentDirectionOfBreakout != "both"){
-      // 市場閉鎖エラーが発生した場合、isRetcodeMarketClosedをtrueにするロジックを含む↓
-      cancel_opposite_order();
-      if (isRetcodeMarketClosed) return;
+      cancel_opposite_order(); // 市場閉鎖エラーハンドリングあり
+      if (isMarketClosed) return;
 
-      if(previousDirectionOfBreakout != "both" && previousDirectionOfBreakout != currentDirectionOfBreakout)
-      {
-        // 前回のブレイク方向とは逆側にブレイクした場合
-        close_opposite_positions();
-      }
-
+      if(isBrokenOpposite()) close_opposite_positions();
       find_and_save_turning_point();
       update_all_stop_loss();
       isInRange = false;
     } else {
-      // currentDirectionOfBreakout == both
-      // TODO: cancel_opposite_orderと同じく市場エラー発生するかも
-      close_all_positions();
-      // if (isRetcodeMarketClosed) return;
+      close_all_positions(); // 市場閉鎖エラーハンドリングあり
+      if (isMarketClosed) return;
 
-      // レンジブレイクした足自体が新しいレンジとなるためレンジ内
-      isInRange = true;
+      isInRange = true; // ブレイク足自体が新しいレンジとなる
     }
   }
 
   if(!isInRange){
-    if(!isRetcodeMarketClosed && !is_range_confirmed()) return;
+    if(!isMarketClosed && !is_range_confirmed()) return;
 
-    isRetcodeMarketClosed = false;
-    // 市場閉鎖エラーが発生した場合、isRetcodeMarketClosedをtrueにするロジックを含む↓
-    send_order_both_stop_buy_and_stop_sell();
-    if (isRetcodeMarketClosed) return;
+    isMarketClosed = false;
+    send_order_both_stop_buy_and_stop_sell(); // 市場閉鎖エラーハンドリングあり
+    if (isMarketClosed) return;
 
     isInRange = true;
   }
+}
+
+
+bool isBrokenOpposite() {
+  bool result;
+  result = previousDirectionOfBreakout != "both" && previousDirectionOfBreakout != currentDirectionOfBreakout;
+  return(result);
 }

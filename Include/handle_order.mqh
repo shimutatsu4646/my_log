@@ -25,7 +25,7 @@ void send_order_both_stop_buy_and_stop_sell()
   if(!OrderSend(request,result)){
     print_error_of_send_order("buy_stop");
     // （市場閉鎖エラーの場合、再試行したいため
-    if(result.retcode == 10018) isRetcodeMarketClosed = true;
+    if(result.retcode == 10018) isMarketClosed = true;
   }
 
   // sell_stop //--- 操作パラメータの設定
@@ -38,12 +38,16 @@ void send_order_both_stop_buy_and_stop_sell()
   if(!OrderSend(request,result)){
     print_error_of_send_order("sell_stop");
     // 市場閉鎖エラーの場合、再試行したいため
-    if(result.retcode == 10018) isRetcodeMarketClosed = true;
+    if(result.retcode == 10018) isMarketClosed = true;
   }
 }
 
 // ==================================================
 // 損切りの更新をする
+
+// TODO: USDJPY 2022/3/16 リクエスト内の無効なストップ
+    // ex) 2021/11/26 is_rage_confirm中に逆側にレンジブレイクしてしまうパターン
+      // →
 void update_all_stop_loss()
 {
   ZeroMemory(request);
@@ -121,7 +125,7 @@ void cancel_opposite_order()
     if(!OrderSend(request,result)){
       print_error_of_send_order("cancel_opposite_order");
       // result.retcodeが10018のとき、再試行したいため
-      if(result.retcode == 10018) isRetcodeMarketClosed = true;
+      if(result.retcode == 10018) isMarketClosed = true;
     }
   }
 
@@ -227,6 +231,8 @@ void close_all_positions()
     // 決済
     if(!OrderSend(request,result)){
       print_error_of_send_order("close_opposite_positions");
+      // result.retcodeが10018のとき、再試行したいため
+      if(result.retcode == 10018) isMarketClosed = true;
       if(result.retcode == 10030){
         Print("request.type_filling: ", request.type_filling);
       }

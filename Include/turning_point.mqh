@@ -56,6 +56,7 @@ double find_last_high()
         // 実装：この中でloopしてnext_barが包み線なのか確認。loopした分だけiをインクリメントすることで整合性を合わせる。
 
         // 懸念点：レンジが広くなるので、トレンドの勢いがあるときはロット数が減って利益が減る。
+          // 逆に無駄な損失を減らして利益が増えるかも
 
         last_high = next_bar_high;
         is_found = true;

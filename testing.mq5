@@ -121,8 +121,7 @@ void OnTick()
 
       if(isBrokenOpposite()) close_opposite_positions();
       find_and_save_turning_point();
-      update_all_stop_loss();
-      // if(!isBrokenOpposite()) update_all_stop_loss();
+      update_all_stop_loss(); // 逆側にレンジブレイクした場合も損切り移動は必要
       isInRange = false;
     } else {
       close_all_positions(); // 市場閉鎖エラーハンドリングあり

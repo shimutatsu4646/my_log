@@ -7,6 +7,8 @@ bool is_range_broken()
   // 更に一つ前の確定済み足
   double previous_bar_high = iHigh(Symbol(),Period(), 2);
   double previous_bar_low = iLow(Symbol(),Period(), 2);
+  // double previous_bar_high = iHigh(Symbol(),Period(), 2);
+  // double previous_bar_low = iLow(Symbol(),Period(), 2);
   bool is_updated = false;
 
   if(latest_bar_high > highOfRange && latest_bar_low < lowOfRange){
@@ -16,6 +18,8 @@ bool is_range_broken()
     currentDirectionOfBreakout = "both";
     comparativeHigh = previous_bar_high;
     comparativeLow = previous_bar_low;
+    // comparativeHigh = previous_bar_high;
+    // comparativeLow = previous_bar_low;
     // この足がレンジになる
     highOfRange = latest_bar_high;
     lowOfRange = latest_bar_low;
@@ -33,6 +37,8 @@ bool is_range_broken()
     currentDirectionOfBreakout = "above";
     comparativeHigh = previous_bar_high;
     comparativeLow = previous_bar_low;
+    // comparativeHigh = previous_bar_high;
+    // comparativeLow = previous_bar_low;
   }
 
   if(is_updated == false && latest_bar_low < lowOfRange){
@@ -41,7 +47,19 @@ bool is_range_broken()
     currentDirectionOfBreakout = "below";
     comparativeHigh = previous_bar_high;
     comparativeLow = previous_bar_low;
+    // comparativeHigh = previous_bar_high;
+    // comparativeLow = previous_bar_low;
   }
+
+  // if (is_updated == false) {
+    // comparativeHighとcomparativeLowに値を代入
+    // はらみ線以外は代入する
+    // レンジブレイクしたときは代入しない。is_range_confirmedで比較するため。
+
+    // 更に一つ前の確定済み足
+    // double previous_bar_high = iHigh(Symbol(),Period(), 2);
+    // double previous_bar_low = iLow(Symbol(),Period(), 2);
+  // }
 
   return is_updated;
 }
@@ -64,7 +82,7 @@ bool is_range_confirmed()
       // 高値更新
 
       if (latest_bar_low < comparativeLow) {
-        // 包み線
+        // latest_bar == 包み線
         highOfRange = latest_bar_high;
         lowOfRange = latest_bar_low;
         is_confirmed = true;
@@ -92,7 +110,7 @@ bool is_range_confirmed()
         LineMove("high");
         ChartRedraw();
       } else {
-        // ハラミ足
+        // latest_bar == はらみ線
         is_confirmed = false;
       }
     }
@@ -103,7 +121,7 @@ bool is_range_confirmed()
       // 安値更新
 
       if (latest_bar_high > comparativeHigh) {
-        // 包み線
+        // latest_bar == 包み線
         lowOfRange = latest_bar_low;
         highOfRange = latest_bar_high;
         is_confirmed = true;
@@ -114,12 +132,10 @@ bool is_range_confirmed()
         LineMove("high");
         ChartRedraw();
       } else {
-        // ハラミ足
+        comparativeHigh = latest_bar_high;
+        comparativeLow = latest_bar_low;
         is_confirmed = false;
       }
-      comparativeHigh = latest_bar_high;
-      comparativeLow = latest_bar_low;
-      is_confirmed = false;
     } else {
       // 安値が更新されなかった場合
 
@@ -133,7 +149,7 @@ bool is_range_confirmed()
         LineMove("low");
         ChartRedraw();
       } else {
-        // ハラミ足
+        // latest_bar == はらみ線
         is_confirmed = false;
       }
     }

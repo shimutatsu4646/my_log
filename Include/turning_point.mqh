@@ -24,8 +24,8 @@ double find_last_high()
 {
   double last_high;
   // ↓レンジブレイクした足
-  double high = iHigh(Symbol(),Period(), 1);
-  double low = iLow(Symbol(),Period(), 1);
+  double next_bar_high = iHigh(Symbol(),Period(), 1);
+  double next_bar_low = iLow(Symbol(),Period(), 1);
   bool is_found = false;
   double previous_bar_high;
   double previous_bar_low;
@@ -34,22 +34,30 @@ double find_last_high()
     previous_bar_high = iHigh(Symbol(),Period(), i);
     previous_bar_low = iLow(Symbol(),Period(), i);
 
-    if(previous_bar_high > high){
-      // 高値更新
-      high = previous_bar_high;
-      low = previous_bar_low;
+    if(previous_bar_high > next_bar_high){
+      // 高値更新（逆算）
+        // next_bar_lowがはらみ足の場合でも、previous_barと合体して考える
+      next_bar_high = previous_bar_high;
+      next_bar_low = previous_bar_low;
       is_found = false;
     } else {
-      // 高値が更新されなかった場合
+      // 高値が更新されなかった場合（逆算）
 
-      if (previous_bar_low < low) {
-        // 安値更新
-        last_high = high;
+      if (previous_bar_low < next_bar_low) {
+        // 安値更新（逆算）
+        last_high = next_bar_high;
         is_found = true;
       } else {
-        // はらみ足
+        // next_bar == 包み線
 
-        last_high = high;
+        // TODO: 更に1個前の足(past_bar)から見てprevious_barがはらみ線の場合→2つの足を一つにまとめて考えるので、next_barは包み線にはならず、上昇トレンド継続となる。(それでもnext_barがpast_barの包み線になる場合はトレンドが一度途切れていることになる。)
+            // find_last_lowも同様。別時間軸の関数にも反映。
+
+        // 実装：この中でloopしてnext_barが包み線なのか確認。loopした分だけiをインクリメントすることで整合性を合わせる。
+
+        // 懸念点：レンジが広くなるので、トレンドの勢いがあるときはロット数が減って利益が減る。
+
+        last_high = next_bar_high;
         is_found = true;
       }
     }
@@ -63,8 +71,8 @@ double find_last_low()
 {
   double last_low;
   // ↓レンジブレイクした足
-  double high = iHigh(Symbol(),Period(), 1);
-  double low = iLow(Symbol(),Period(), 1);
+  double next_bar_high = iHigh(Symbol(),Period(), 1);
+  double next_bar_low = iLow(Symbol(),Period(), 1);
   bool is_found = false;
   double previous_bar_high;
   double previous_bar_low;
@@ -73,22 +81,22 @@ double find_last_low()
     previous_bar_high = iHigh(Symbol(),Period(), i);
     previous_bar_low = iLow(Symbol(),Period(), i);
 
-    if(previous_bar_low < low){
-      // 安値更新
-      high = previous_bar_high;
-      low = previous_bar_low;
+    if(previous_bar_low < next_bar_low){
+      // 安値更新（逆算）
+        // next_bar_lowがはらみ足の場合でも、previous_barと合体して考える
+      next_bar_high = previous_bar_high;
+      next_bar_low = previous_bar_low;
       is_found = false;
     } else {
-      // 安値が更新されなかった場合
+      // 安値が更新されなかった場合（逆算）
 
-      if (previous_bar_high > high) {
-        // 高値更新
-        last_low = low;
+      if (previous_bar_high > next_bar_high) {
+        // 高値更新（逆算）
+        last_low = next_bar_low;
         is_found = true;
       } else {
-        // はらみ足
-
-        last_low = low;
+        // next_bar == 包み線
+        last_low = next_bar_low;
         is_found = true;
       }
     }

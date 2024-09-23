@@ -89,27 +89,8 @@ int OnInit()
 
 void OnTick()
 {
-  // 月足
-  // change_long_timebar_data(); ↓内容
-  datetime currentLongBarTime = iTime(_Symbol, PERIOD_W1, 0);
-  if(currentLongBarTime != lastLongBarTime) {
-    lastLongBarTime = currentLongBarTime;
-    if(isInLongRange) {
-      if(!is_long_range_broken()) return;
-
-      if(currentLongDirectionOfBreakout != "both"){
-        find_and_save_long_turning_point();
-        isInLongRange = false;
-      } else {
-        isInLongRange = true;
-      }
-    }
-    if(!isInLongRange){
-      if(!is_long_range_confirmed()) return;
-
-      isInLongRange = true;
-    }
-  }
+  // 週足
+  change_long_timebar_data();
 
   // 日足
   if(!isMarketClosed){
@@ -141,6 +122,7 @@ void OnTick()
       if(isBrokenOpposite()) close_opposite_positions();
       find_and_save_turning_point();
       update_all_stop_loss();
+      // if(!isBrokenOpposite()) update_all_stop_loss();
       isInRange = false;
     } else {
       close_all_positions(); // 市場閉鎖エラーハンドリングあり
@@ -166,4 +148,27 @@ bool isBrokenOpposite() {
   bool result;
   result = previousDirectionOfBreakout != "both" && previousDirectionOfBreakout != currentDirectionOfBreakout;
   return(result);
+}
+
+
+void change_long_timebar_data() {
+  datetime currentLongBarTime = iTime(_Symbol, PERIOD_W1, 0);
+  if(currentLongBarTime != lastLongBarTime) {
+    lastLongBarTime = currentLongBarTime;
+    if(isInLongRange) {
+      if(!is_long_range_broken()) return;
+
+      if(currentLongDirectionOfBreakout != "both"){
+        find_and_save_long_turning_point();
+        isInLongRange = false;
+      } else {
+        isInLongRange = true;
+      }
+    }
+    if(!isInLongRange){
+      if(!is_long_range_confirmed()) return;
+
+      isInLongRange = true;
+    }
+  }
 }

@@ -24,8 +24,8 @@ double find_last_long_high()
 {
   double last_high;
   // ↓長期レンジをブレイクした足
-  double high = iHigh(Symbol(),PERIOD_W1, 1);
-  double low = iLow(Symbol(),PERIOD_W1, 1);
+  double next_bar_high = iHigh(Symbol(),PERIOD_W1, 1);
+  double next_bar_low = iLow(Symbol(),PERIOD_W1, 1);
   bool is_found = false;
   double previous_bar_high;
   double previous_bar_low;
@@ -34,22 +34,22 @@ double find_last_long_high()
     previous_bar_high = iHigh(Symbol(),PERIOD_W1, i);
     previous_bar_low = iLow(Symbol(),PERIOD_W1, i);
 
-    if(previous_bar_high > high){
-      // 高値更新
-      high = previous_bar_high;
-      low = previous_bar_low;
+    if(previous_bar_high > next_bar_high){
+      // 高値更新（逆算）
+      next_bar_high = previous_bar_high;
+      next_bar_low = previous_bar_low;
       is_found = false;
     } else {
-      // 高値が更新されなかった場合
+      // 高値が更新されなかった場合（逆算）
 
-      if (previous_bar_low < low) {
-        // 安値更新
-        last_high = high;
+      if (previous_bar_low < next_bar_low) {
+        // 安値更新（逆算）
+        last_high = next_bar_high;
         is_found = true;
       } else {
-        // はらみ足
+        // next_bar == 包み線
 
-        last_high = high;
+        last_high = next_bar_high;
         is_found = true;
       }
     }
@@ -63,8 +63,8 @@ double find_last_long_low()
 {
   double last_low;
   // ↓長期レンジをブレイクした足
-  double high = iHigh(Symbol(),PERIOD_W1, 1);
-  double low = iLow(Symbol(),PERIOD_W1, 1);
+  double next_bar_high = iHigh(Symbol(),PERIOD_W1, 1);
+  double next_bar_low = iLow(Symbol(),PERIOD_W1, 1);
   bool is_found = false;
   double previous_bar_high;
   double previous_bar_low;
@@ -73,22 +73,21 @@ double find_last_long_low()
     previous_bar_high = iHigh(Symbol(),PERIOD_W1, i);
     previous_bar_low = iLow(Symbol(),PERIOD_W1, i);
 
-    if(previous_bar_low < low){
-      // 安値更新
-      high = previous_bar_high;
-      low = previous_bar_low;
+    if(previous_bar_low < next_bar_low){
+      // 安値更新（逆算）
+      next_bar_high = previous_bar_high;
+      next_bar_low = previous_bar_low;
       is_found = false;
     } else {
-      // 安値が更新されなかった場合
+      // 安値が更新されなかった場合（逆算）
 
-      if (previous_bar_high > high) {
-        // 高値更新
-        last_low = low;
+      if (previous_bar_high > next_bar_high) {
+        // 高値更新（逆算）
+        last_low = next_bar_low;
         is_found = true;
       } else {
-        // はらみ足
-
-        last_low = low;
+        // next_bar == 包み線
+        last_low = next_bar_low;
         is_found = true;
       }
     }

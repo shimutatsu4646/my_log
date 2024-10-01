@@ -20,10 +20,10 @@
 
 // 自分で定義した関数と関数内で定義した変数は、snake_caseにする。
 
-input double high; // 高値
-input double low; // 安値
-input double longHigh; // 高値
-input double longLow; // 安値
+input double high; // 日足高値(high)
+input double low; // 日足安値(low)
+input double longHigh; // 週足高値(longHigh)
+input double longLow; // 週足安値(longLow)
 // ↓今回、レンジのどちらに抜けたか
 input string current_direction_of_breakout; // [current] below=下抜け、avobe=上抜け
 // ↓前のレンジ抜けの方向

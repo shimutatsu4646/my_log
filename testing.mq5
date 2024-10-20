@@ -57,6 +57,7 @@ MqlTradeResult result;
 // cancel_opposite_orderでのみ発生している前提のロジックとなっている。
 bool isMarketClosed;
 // int fillType;
+bool isStalledNearSomeWall;
 
 int OnInit()
 {
@@ -79,6 +80,7 @@ int OnInit()
   lastLongBarTime = iTime(_Symbol, PERIOD_W1, 0);
   isMarketClosed = false;
   // fillType = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
+  isStalledNearSomeWall = false;
   LineCreate("high");
   LineCreate("low");
   LongLineCreate("high");
@@ -111,8 +113,14 @@ void OnTick()
   ZeroMemory(request);
   ZeroMemory(result);
 
-  if(isInRange){
+  if (isInRange) {
+    // 市場閉鎖フラグでレンジ確認処理をスキップ
     if (!isMarketClosed && !is_range_broken()) return;
+
+    if (isStalledNearSomeWall) {
+      RecordLineDelete();
+      isStalledNearSomeWall = false;
+    }
 
     isMarketClosed = false;
     if(currentDirectionOfBreakout != "both"){
@@ -132,7 +140,26 @@ void OnTick()
   }
 
   if(!isInRange){
-    if(!isMarketClosed && !is_range_confirmed()) return;
+    // 市場閉鎖フラグで下記処理をスキップ
+    if (!isMarketClosed) {
+      if (!is_range_confirmed()) return;
+
+      if (isInLongRange) {
+        /*
+          全体：日足が週足レンジの壁の手前で止まった場合、ポジション決済して利確する。そして逆指値注文を壁（週足レンジ）を超えたところに置く。
+            考慮：週足がレンジブレイク中のとき週足を壁にできないのでイベント発火なし
+            TODO: 条件付きで逆張りポジションを持つ。（成行？）
+
+          TODO: 過去の高値安値の手前という場合も含める。キリのいい数字・パリティも含める。
+            TODO: 日足レンジ内で逆ポジ狙えないかp72
+        */
+        isStalledNearSomeWall = is_stalled_near_week_range();
+        if (isStalledNearSomeWall) {
+          close_all_positions(); // TODO: 短い時間軸のトレードで建てたポジションを考慮。magicで管理すれば良さそう。
+          move_one_sided_daily_range_to_week_range();
+        }
+      }
+    }
 
     isMarketClosed = false;
     send_order_both_stop_buy_and_stop_sell(); // 市場閉鎖エラーハンドリングあり
@@ -170,4 +197,23 @@ void change_long_timebar_data() {
       isInLongRange = true;
     }
   }
+}
+
+
+void move_one_sided_daily_range_to_week_range() {
+  /*
+    ・記録用のchartLineを追加（次にブレイクされたときに消去）
+    ・片方の日足レンジを週足レンジまで移動
+    ・実際のchartLineを移動
+  */
+  if (currentDirectionOfBreakout == "above") {
+    RecordLineCreate(highOfRange);
+    highOfRange = highOfLongRange;
+    LineMove("high");
+  } else if (currentDirectionOfBreakout == "below") {
+    RecordLineCreate(lowOfRange);
+    lowOfRange = lowOfLongRange;
+    LineMove("low");
+  }
+  ChartRedraw();
 }

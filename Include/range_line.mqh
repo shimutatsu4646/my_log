@@ -53,6 +53,38 @@ bool LineCreate(string state)
   return(true);
 }
 
+// 記録用水平線を作成する
+bool RecordLineCreate(double price) {
+
+  long chart_ID = 0;
+  int sub_window = 0;
+  string name = "DailyRecordLine";
+  color clr = C'0,239,252';
+  ENUM_LINE_STYLE style = STYLE_DASH;
+  int width = 1;
+  bool back = false;
+  bool selection = true;
+  bool hidden = true;
+  long z_order = 0;
+
+  ResetLastError();
+  if(!ObjectCreate(chart_ID, name, OBJ_HLINE, sub_window, 0, price))
+    {
+    Print(__FUNCTION__,
+          ": failed to create a horizontal line! Error code = ",GetLastError());
+    return(false);
+    }
+  ObjectSetInteger(chart_ID, name, OBJPROP_COLOR, clr);
+  ObjectSetInteger(chart_ID, name, OBJPROP_STYLE, style);
+  ObjectSetInteger(chart_ID, name, OBJPROP_WIDTH, width);
+  ObjectSetInteger(chart_ID, name, OBJPROP_BACK, back);
+  ObjectSetInteger(chart_ID, name, OBJPROP_SELECTABLE, selection);
+  ObjectSetInteger(chart_ID, name, OBJPROP_SELECTED, selection);
+  ObjectSetInteger(chart_ID, name, OBJPROP_HIDDEN, hidden);
+  ObjectSetInteger(chart_ID, name, OBJPROP_ZORDER, z_order);
+  return(true);
+}
+
 
 
 // 水平線を移動する
@@ -105,5 +137,20 @@ bool LineDelete(string state)
     return(false);
     }
 //--- 実行成功
+  return(true);
+}
+
+// 記録用水平線を削除する
+bool RecordLineDelete() {
+  long chart_ID = 0;
+  string name = "DailyRecordLine";
+  ResetLastError();
+  if(!ObjectDelete(chart_ID, name))
+    {
+    Print(__FUNCTION__,
+          ": failed to delete a horizontal line! Error code = ",GetLastError());
+    return(false);
+    }
+
   return(true);
 }

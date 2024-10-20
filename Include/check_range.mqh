@@ -143,3 +143,37 @@ bool is_range_confirmed()
 
   return is_confirmed;
 }
+
+
+// レンジブレイクが止まったのが週足レンジの手前か
+bool is_stalled_near_week_range() {
+  // 週足レンジ全体の<90%>を超えているところで日足レンジブレイクが止まっていたらtrueを返す
+  bool result = false;
+  double rate = 90.0;
+  double price_range;
+  double price_range_with_rate;
+  double check_price;
+  int digits = Digits();
+
+  price_range = highOfLongRange - lowOfLongRange;
+  price_range_with_rate = price_range * (rate / 100);
+  price_range_with_rate = NormalizeDouble(price_range_with_rate, digits);
+
+  if (currentDirectionOfBreakout == "above") {
+    check_price =  lowOfLongRange + price_range_with_rate;
+    if (highOfRange > check_price) {
+      result = true;
+    } else {
+      result = false;
+    }
+  } else if (currentDirectionOfBreakout == "below") {
+    check_price =  highOfLongRange - price_range_with_rate;
+    if (lowOfRange < check_price) {
+      result = true;
+    } else {
+      result = false;
+    }
+  }
+
+  return result;
+}

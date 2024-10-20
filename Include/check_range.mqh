@@ -144,8 +144,7 @@ bool is_range_confirmed()
   return is_confirmed;
 }
 
-
-// レンジブレイクが止まったのが週足レンジの手前か
+// レンジブレイクが止まったのが週足レンジの手前かどうか
 bool is_stalled_near_week_range() {
   // 週足レンジ全体の<90%>を超えているところで日足レンジブレイクが止まっていたらtrueを返す
   bool result = false;
@@ -161,14 +160,14 @@ bool is_stalled_near_week_range() {
 
   if (currentDirectionOfBreakout == "above") {
     check_price =  lowOfLongRange + price_range_with_rate;
-    if (highOfRange > check_price) {
+    if (highOfRange > check_price && highOfRange <= highOfLongRange) {
       result = true;
     } else {
       result = false;
     }
   } else if (currentDirectionOfBreakout == "below") {
     check_price =  highOfLongRange - price_range_with_rate;
-    if (lowOfRange < check_price) {
+    if (lowOfRange < check_price  && lowOfRange >= lowOfLongRange) {
       result = true;
     } else {
       result = false;

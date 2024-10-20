@@ -106,9 +106,12 @@ void update_all_stop_loss()
 
 //=================================================
 // レンジブレイクの逆の注文をキャンセルする
+
+// TODO: 逆張りポジションのロジックがあると、1つ以上になる。
+  // 一つだけじゃなくてすべてキャンセルする
 void cancel_opposite_order()
 {
-  int same_magic_count = 0;
+  // int same_magic_count = 0;
   int total = OrdersTotal(); // ←未決注文しか取得しない
   for(int i = total - 1; i >= 0; i--)
   {
@@ -116,7 +119,7 @@ void cancel_opposite_order()
     ulong magic = OrderGetInteger(ORDER_MAGIC);
     if(magic!=expertMagic) continue; // MagicNumberが一致していない場合スキップ
 
-    same_magic_count++;
+    // same_magic_count++;
     ZeroMemory(request);
     ZeroMemory(result);
     request.action = TRADE_ACTION_REMOVE;
@@ -131,16 +134,18 @@ void cancel_opposite_order()
 
   // magic_number（適応されているペア）内に逆指値注文は１つだけのはず
     // 片方はポジションになったため
-  if(same_magic_count > 1){
-    Print("★cancel_opposite_order: same_magic_count is: ", same_magic_count);
-  }
+  // if(same_magic_count > 1){
+  //   Print("★cancel_opposite_order: same_magic_count is: ", same_magic_count);
+  // }
 }
 
 // ==============================================
 // レンジブレイクの逆のポジションを決済する
+// ★★★TODO: これが実行されるときには既に損切り決済済みかも。しかもロジックおかしい。
 void close_opposite_positions()
 {
   ENUM_POSITION_TYPE type_of_position_closing;
+  // TODO: ↓current~~になるべき。
   if(previousDirectionOfBreakout == "above")
   {
     type_of_position_closing = POSITION_TYPE_SELL;
@@ -240,3 +245,55 @@ void close_all_positions()
     // fillされたときに、残りのポジションを再度closeする。（retcodeでfillポリシーが適用されたか確認する？）
   }
 }
+
+// =================================================
+// 逆指値注文を週足レンジの位置に移動する
+  // currentDirectionOfBreakoutの方向にある注文を更新。（aboveなら買い注文を更新）
+
+  // https://www.mql5.com/ja/docs/constants/tradingconstants/enum_trade_request_actions#trade_action_modify
+
+/*
+void update_one_sided_stop_order_to_week_range()
+{
+  int total = OrdersTotal();
+  for(int i = total - 1; i >= 0; i--)
+  {
+    ulong order_ticket = OrderGetTicket(i);
+    ulong magic = OrderGetInteger(ORDER_MAGIC);
+    if (magic != expertMagic) continue;
+
+    ZeroMemory(request);
+    ZeroMemory(result);
+    double price;
+    double sl;
+    double point = Point();
+    int digits = Digits();
+    ENUM_ORDER_TYPE type = (ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE);
+
+    if (type == ORDER_TYPE_BUY_STOP) {
+      if (currentDirectionOfBreakout != "above") continue;
+
+      price = highOfLongRange + point; // 週足レンジに移動
+      request.price = NormalizeDouble(price, digits);
+      sl = lowOfRange - point; // 損切りラインは日足レンジ
+      request.sl = request.sl = NormalizeDouble(sl, digits);
+    } else {
+      if (currentDirectionOfBreakout != "below") continue;
+
+      price = lowOfLongRange - point;
+      request.price = NormalizeDouble(price, digits);
+      sl = highOfRange + point;
+      request.sl = NormalizeDouble(sl, digits);
+    }
+
+    request.action = TRADE_ACTION_MODIFY; // 未決注文の更新
+    request.order = order_ticket;
+    request.symbol = Symbol();
+    request.deviation = 10;
+    // 残留した未決注文をキャンセル
+    if (!OrderSend(request, result)) {
+      print_error_of_send_order("update_one_sided_stop_order_to_week_range");
+    }
+  }
+}
+*/

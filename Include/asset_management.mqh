@@ -136,3 +136,9 @@ void check_effective_leverage()
     Print("！！！！！実効レバレッジが10倍以上！！！！！");
   }
 }
+
+void check_risk_reward_ratio() {
+  /*
+  
+  */
+}

@@ -8,6 +8,22 @@
 #property link      "https://www.mql5.com"
 #property version   "1.00"
 
+#property indicator_buffers 3
+#property indicator_plots   3
+// dma 期間-シフト
+// dma 3-3
+#property indicator_label1  "SMA(3)"
+#property indicator_type1   DRAW_LINE
+#property indicator_style1  STYLE_SOLID
+// dma 7-5
+#property indicator_label2  "SMA(7)"
+#property indicator_type2   DRAW_LINE
+#property indicator_style2  STYLE_SOLID
+// dma 25-5
+#property indicator_label3  "SMA(25)"
+#property indicator_type3   DRAW_LINE
+#property indicator_style3  STYLE_SOLID
+
 #include <MyCode/range_line.mqh>
 #include <MyCode/long_range_line.mqh>
 #include <MyCode/print_error.mqh>
@@ -57,6 +73,13 @@ MqlTradeResult result;
 // cancel_opposite_orderでのみ発生している前提のロジックとなっている。
 bool isMarketClosed;
 // int fillType;
+double dma3Buffer[];
+double dma7Buffer[];
+double dma25Buffer[];
+// ハンドルをグローバル変数として保持
+int ma3Handle;
+int ma7Handle;
+int ma25Handle;
 
 int OnInit()
 {
@@ -84,7 +107,37 @@ int OnInit()
   LongLineCreate("high");
   LongLineCreate("low");
   ChartRedraw();
+
+  // バッファの設定（順序が重要）
+  SetIndexBuffer(0, dma3Buffer, INDICATOR_DATA);
+  SetIndexBuffer(1, dma7Buffer, INDICATOR_DATA);
+  SetIndexBuffer(2, dma25Buffer, INDICATOR_DATA);
+
+  // 移動平均線のハンドルを取得
+  ma3Handle = iMA(_Symbol, PERIOD_CURRENT, 3, 3, MODE_SMA, PRICE_CLOSE);
+  ma7Handle = iMA(_Symbol, PERIOD_CURRENT, 7, 5, MODE_SMA, PRICE_CLOSE);
+  ma25Handle = iMA(_Symbol, PERIOD_CURRENT, 25, 5, MODE_SMA, PRICE_CLOSE);
+
   return(INIT_SUCCEEDED);
+}
+
+int OnCalculate(const int rates_total,
+                const int prev_calculated,
+                const datetime &time[],
+                const double &open[],
+                const double &high[],
+                const double &low[],
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[])
+{
+  // 移動平均値をバッファにコピー
+  if(CopyBuffer(ma3Handle, 0, 0, rates_total, dma3Buffer) <= 0) return(0);
+  if(CopyBuffer(ma7Handle, 0, 0, rates_total, dma7Buffer) <= 0) return(0);
+  if(CopyBuffer(ma25Handle, 0, 0, rates_total, dma25Buffer) <= 0) return(0);
+
+  return(rates_total);
 }
 
 void OnTick()

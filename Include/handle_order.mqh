@@ -141,14 +141,14 @@ void cancel_opposite_order()
 void close_opposite_positions()
 {
   ENUM_POSITION_TYPE type_of_position_closing;
-  if(previousDirectionOfBreakout == "above")
+  if(currentDirectionOfBreakout == "above")
   {
     type_of_position_closing = POSITION_TYPE_SELL;
-  } else if(previousDirectionOfBreakout == "below")
+  } else if(currentDirectionOfBreakout == "below")
   {
     type_of_position_closing = POSITION_TYPE_BUY;
-  } else if(previousDirectionOfBreakout == "both") {
-    // previous~~がbothのときはこの関数は実行されないはず
+  } else if(currentDirectionOfBreakout == "both") {
+    // bothのときはこの関数は実行されないはず
     Print("★close_opposite_positions: Logic's fucked up!!! ");
   }
 

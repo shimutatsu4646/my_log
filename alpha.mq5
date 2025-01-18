@@ -216,6 +216,7 @@ void OnTick()
       cancel_opposite_order(); // 市場閉鎖エラーハンドリングあり
       if (isMarketClosed) return;
 
+      // これが実行されるときにはすでに反対側のポジションは全部損切り済みのはずだが、念の為
       if(isBrokenOpposite()) close_opposite_positions();
       isInRange = false;
     } else {

@@ -62,9 +62,9 @@ bool is_long_range_broken()
     nextTurningLongHigh = latest_bar_high;
     nextTurningLongLow = latest_bar_low;
     longBarDirection = "both";
-    Print("★長期レンジをどちらにも抜けた");
-    Print("★長期レンジ上限： ", highOfLongRange);
-    Print("★長期レンジ下限： ", lowOfLongRange);
+    // Print("★長期レンジをどちらにも抜けた");
+    // Print("★長期レンジ上限： ", highOfLongRange);
+    // Print("★長期レンジ下限： ", lowOfLongRange);
     LongLineMove("high");
     LongLineMove("low");
     ChartRedraw();
@@ -104,9 +104,9 @@ bool is_long_range_confirmed()
         // パターンD
         highOfLongRange = latest_bar_high;
         is_confirmed = true;
-        Print("★長期レンジ確定（包み足）");
-        Print("長期レンジ上限： ", highOfLongRange);
-        Print("長期レンジ下限： ", lowOfLongRange);
+        // Print("★長期レンジ確定（包み足）");
+        // Print("長期レンジ上限： ", highOfLongRange);
+        // Print("長期レンジ下限： ", lowOfLongRange);
         LongLineMove("high");
         ChartRedraw();
       } else {
@@ -119,9 +119,9 @@ bool is_long_range_confirmed()
         // パターンB
         highOfLongRange = comparativeLongHigh;
         is_confirmed = true;
-        Print("★長期レンジ確定");
-        Print("長期レンジ上限： ", highOfLongRange);
-        Print("長期レンジ下限： ", lowOfLongRange);
+        // Print("★長期レンジ確定");
+        // Print("長期レンジ上限： ", highOfLongRange);
+        // Print("長期レンジ下限： ", lowOfLongRange);
         LongLineMove("high");
         ChartRedraw();
       } else {
@@ -137,9 +137,9 @@ bool is_long_range_confirmed()
         // パターンD
         lowOfLongRange = latest_bar_low;
         is_confirmed = true;
-        Print("★長期レンジ確定(包み足)");
-        Print("長期レンジ下限： ", lowOfLongRange);
-        Print("長期レンジ上限： ", highOfLongRange);
+        // Print("★長期レンジ確定(包み足)");
+        // Print("長期レンジ下限： ", lowOfLongRange);
+        // Print("長期レンジ上限： ", highOfLongRange);
         LongLineCreate("low");
         ChartRedraw();
       } else {
@@ -152,9 +152,9 @@ bool is_long_range_confirmed()
         // パターンA
         lowOfLongRange = comparativeLongLow;
         is_confirmed = true;
-        Print("★長期レンジ確定");
-        Print("長期レンジ下限： ", lowOfLongRange);
-        Print("長期レンジ上限： ", highOfLongRange);
+        // Print("★長期レンジ確定");
+        // Print("長期レンジ下限： ", lowOfLongRange);
+        // Print("長期レンジ上限： ", highOfLongRange);
         LongLineMove("low");
         ChartRedraw();
       } else {
@@ -164,7 +164,7 @@ bool is_long_range_confirmed()
     }
   } else if(currentLongDirectionOfBreakout == "both"){
     // current~~がbothのとき、この関数は実行されないはず
-    Print("！！！is_range_confirmed: Logic's fucked up!!!");
+    // Print("！！！is_range_confirmed: Logic's fucked up!!!");
   }
 
   return is_confirmed;

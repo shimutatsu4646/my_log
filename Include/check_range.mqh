@@ -73,9 +73,9 @@ bool is_range_broken()
     nextTurningHigh = latest_bar_high;
     nextTurningLow = latest_bar_low;
     barDirection = "both";
-    Print("★レンジをどちらにも抜けた");
-    Print("★レンジ上限： ", highOfRange);
-    Print("★レンジ下限： ", lowOfRange);
+    // // Print("★レンジをどちらにも抜けた");
+    // Print("★レンジ上限： ", highOfRange);
+    // Print("★レンジ下限： ", lowOfRange);
     LineMove("high");
     LineMove("low");
     ChartRedraw();
@@ -116,9 +116,9 @@ bool is_range_confirmed()
         highOfRange = latest_bar_high;
         // lowOfRangeは格納済み（update_range_of_turning_point）
         is_confirmed = true;
-        Print("★レンジ確定（包み足）");
-        Print("レンジ上限： ", highOfRange);
-        Print("レンジ下限： ", lowOfRange);
+        // Print("★レンジ確定（包み足）");
+        // Print("レンジ上限： ", highOfRange);
+        // Print("レンジ下限： ", lowOfRange);
         LineMove("high");
         ChartRedraw();
       } else {
@@ -131,9 +131,9 @@ bool is_range_confirmed()
         // パターンB
         highOfRange = comparativeHigh;
         is_confirmed = true;
-        Print("★レンジ確定");
-        Print("レンジ上限： ", highOfRange);
-        Print("レンジ下限： ", lowOfRange);
+        // Print("★レンジ確定");
+        // Print("レンジ上限： ", highOfRange);
+        // Print("レンジ下限： ", lowOfRange);
         LineMove("high");
         ChartRedraw();
       } else {
@@ -150,9 +150,9 @@ bool is_range_confirmed()
         lowOfRange = latest_bar_low;
         // highOfRangeは格納済み（update_range_of_turning_point）
         is_confirmed = true;
-        Print("★レンジ確定(包み足)");
-        Print("レンジ下限： ", lowOfRange);
-        Print("レンジ上限： ", highOfRange);
+        // Print("★レンジ確定(包み足)");
+        // Print("レンジ下限： ", lowOfRange);
+        // Print("レンジ上限： ", highOfRange);
         LineMove("low");
         ChartRedraw();
       } else {
@@ -165,9 +165,9 @@ bool is_range_confirmed()
         // パターンA
         lowOfRange = comparativeLow;
         is_confirmed = true;
-        Print("★レンジ確定");
-        Print("レンジ下限： ", lowOfRange);
-        Print("レンジ上限： ", highOfRange);
+        // Print("★レンジ確定");
+        // Print("レンジ下限： ", lowOfRange);
+        // Print("レンジ上限： ", highOfRange);
         LineMove("low");
         ChartRedraw();
       } else {
@@ -177,7 +177,7 @@ bool is_range_confirmed()
     }
   } else if(currentDirectionOfBreakout == "both"){
     // current~~がbothのとき、この関数は実行されないはず
-    Print("！！！is_range_confirmed: Logic's fucked up!!!");
+    // Print("！！！is_range_confirmed: Logic's fucked up!!!");
   }
 
   return is_confirmed;

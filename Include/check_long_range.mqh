@@ -21,21 +21,17 @@ void update_global_long_bar_data()
       longBarDirection = "both";
     } else {
       // パターンA
-      if(longBarDirection == "below") {
-        nextTurningLongLow = comparativeLongLow;
-      }
       comparativeLongHigh = latest_bar_high;
       comparativeLongLow = latest_bar_low;
+      nextTurningLongHigh = latest_bar_high;
       longBarDirection = "above";
     }
   } else {
     if (latest_bar_low < comparativeLongLow) {
       // パターンB
-      if(longBarDirection == "above") {
-        nextTurningLongHigh = comparativeLongHigh;
-      }
       comparativeLongHigh = latest_bar_high;
       comparativeLongLow = latest_bar_low;
+      nextTurningLongLow = latest_bar_low;
       longBarDirection = "below";
     } else {
       // パターンC

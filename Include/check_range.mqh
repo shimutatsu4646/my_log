@@ -20,6 +20,7 @@ void update_global_bar_data()
   double latest_bar_high = iHigh(Symbol(),Period(), 1);
   double latest_bar_low = iLow(Symbol(),Period(), 1);
 
+  // 最新のbarDirectionは最後に代入する。→前回のbarDirectionを参照できる
   if(latest_bar_high > comparativeHigh){
     if (latest_bar_low < comparativeLow) {
       // パターンD
@@ -31,21 +32,17 @@ void update_global_bar_data()
       barDirection = "both";
     } else {
       // パターンA
-      if(barDirection == "below") {
-        nextTurningLow = comparativeLow;
-      }
       comparativeHigh = latest_bar_high;
       comparativeLow = latest_bar_low;
+      nextTurningHigh = latest_bar_high;
       barDirection = "above";
     }
   } else {
     if (latest_bar_low < comparativeLow) {
       // パターンB
-      if(barDirection == "above") {
-        nextTurningHigh = comparativeHigh;
-      }
       comparativeHigh = latest_bar_high;
       comparativeLow = latest_bar_low;
+      nextTurningLow = latest_bar_low;
       barDirection = "below";
     } else {
       // パターンC

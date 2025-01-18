@@ -131,6 +131,7 @@ void check_effective_leverage()
 
   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
   double effective_leverage = totalTradeAmount / equity;
+  EffectiveLeverage = effective_leverage;
   Print("実効レバレッジ: ",  effective_leverage);
   if (effective_leverage >= 10){
     Print("！！！！！実効レバレッジが10倍以上！！！！！");

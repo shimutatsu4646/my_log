@@ -48,6 +48,9 @@ void send_order_both_stop_buy_and_stop_sell()
 // TODO: USDJPY 2022/3/16 リクエスト内の無効なストップ
     // ex) 2021/11/26 is_rage_confirm中に逆側にレンジブレイクしてしまうパターン
       // →
+// MEMO: 反対側にレンジブレイクしたときも損切りラインは移動しないといけない。
+// MEMO: currentDirectionOfBreakoutの方向のポジションのみ更新すればいい。
+// MEMO: 「無効なストップエラー」が発生するのは、全く同じ値に更新しようとしている（レンジの転換点の位置が変わらない場合）か、現在のレートを超えている場合。（損切りとして機能しない位置になってしまっている）
 void update_all_stop_loss()
 {
   ZeroMemory(request);
@@ -63,11 +66,33 @@ void update_all_stop_loss()
     ulong magic = PositionGetInteger(POSITION_MAGIC); // ポジションのMagicNumber
     if(magic != expertMagic) continue; // MagicNumberが一致していない場合スキップ
 
+    ENUM_POSITION_TYPE expected_type;
+    if(currentDirectionOfBreakout == "above") {
+      expected_type = POSITION_TYPE_BUY;
+    } else if(currentDirectionOfBreakout == "below") {
+      expected_type = POSITION_TYPE_SELL;
+    } else {
+      Print("★update_all_stop_loss: Logic's fucked up!!! 1");
+      Print("type(0=buy, 1=sell): ", type);
+      Print("currentDirection: ", currentDirectionOfBreakout);
+      continue;
+    }
+
+    ENUM_POSITION_TYPE type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+    // ポジションタイプが一致しない場合スキップ
+    // この関数が実行されるときタイプが一致しない（反対側の）ポジションは存在しないはず
+    // →決済しきれていない反対側のポジションがあるかもしれない。
+    if(type != expected_type) {
+      Print("★update_all_stop_loss: Logic's fucked up!!! 2");
+      Print("type(0=buy, 1=sell): ", type);
+      Print("currentDirection: ", currentDirectionOfBreakout);
+      continue;
+    }
+
     string position_symbol = PositionGetString(POSITION_SYMBOL);
     double sl;
     double point = SymbolInfoDouble(position_symbol, SYMBOL_POINT); // positionのsymbolにしてないけど、magicチェックしてるし平気でしょ
     int digits = (int)SymbolInfoInteger(position_symbol, SYMBOL_DIGITS); // 小数点以下の桁数
-    ENUM_POSITION_TYPE type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE); // ポジションタイプ
 
     ZeroMemory(request);
     ZeroMemory(result);
@@ -76,19 +101,13 @@ void update_all_stop_loss()
     request.symbol = position_symbol;
     request.magic = magic;
 
-    if(type == POSITION_TYPE_BUY && currentDirectionOfBreakout == "above") // 一致するはず
+    if(currentDirectionOfBreakout == "above")
     {
       sl = lowOfRange - point;
       request.sl = NormalizeDouble(sl, digits);
-    } else if(type == POSITION_TYPE_SELL && currentDirectionOfBreakout == "below")  {
+    } else if(currentDirectionOfBreakout == "below")  {
       sl = highOfRange + point;
       request.sl = NormalizeDouble(sl, digits);
-    } else if(currentDirectionOfBreakout == "both")  {
-      // current~~がbothのときだと考えられるが、この関数は実行されないはず
-      // レンジをどちらにも抜けたらミスマッチする
-      Print("★update_all_stop_loss: Logic's fucked up!!! ");
-      Print("type(0=buy, 1=sell): ", type);
-      Print("currentDirection: ", currentDirectionOfBreakout);
     }
 
     //--- リクエストの送信

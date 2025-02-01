@@ -14,7 +14,14 @@ void update_long_range_of_turning_point()
     LongLineMove("high");
     ChartRedraw();
   } else if(currentLongDirectionOfBreakout == "both") {
+    highOfLongRange = nextTurningLongHigh;
+    lowOfLongRange = nextTurningLongLow;
     // current~~がbothのとき、この関数は実行されないはず
     // Print("！！！find_and_save_turning_point: Logic's fucked up!!!");
+    // Print("★長期レンジ上限： ", highOfLongRange);
+    // Print("★長期レンジ下限： ", lowOfLongRange);
+    LongLineMove("high");
+    LongLineMove("low");
+    ChartRedraw();
   }
 }

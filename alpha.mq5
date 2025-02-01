@@ -266,10 +266,10 @@ void change_long_timebar_data() {
   datetime currentLongBarTime = iTime(_Symbol, PERIOD_W1, 0);
   if(currentLongBarTime != lastLongBarTime) {
     lastLongBarTime = currentLongBarTime;
-    isBrokenSameTimeForLong = false;
     if(isInLongRange) {
       if(is_long_range_broken()){
-        isBrokenSameTimeForLong = true;
+        update_global_long_bar_data();
+        update_long_range_of_turning_point();
       } else {
         update_global_long_bar_data();
         return;
@@ -282,14 +282,12 @@ void change_long_timebar_data() {
         // update_global_bar_dataは実行しない。is_range_broken内で更新するため。
         isInLongRange = true;
       }
+      return;
     }
 
     if(!isInLongRange){
       bool result_bool;
       result_bool = is_long_range_confirmed();
-      if(isBrokenSameTimeForLong) {
-        update_long_range_of_turning_point();
-      }
       update_global_long_bar_data();
       if(result_bool == false) return;
 

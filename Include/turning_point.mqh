@@ -14,7 +14,14 @@ void update_range_of_turning_point()
     LineMove("high");
     ChartRedraw();
   } else if(currentDirectionOfBreakout == "both") {
-    // current~~がbothのとき、この関数は実行されないはず
+    highOfRange = nextTurningHigh;
+    lowOfRange = nextTurningLow;
     // Print("！！！find_and_save_turning_point: Logic's fucked up!!!");
+    // Print("★レンジをどちらにも抜けた");
+    // Print("★レンジ上限： ", highOfRange);
+    // Print("★レンジ下限： ", lowOfRange);
+    LineMove("high");
+    LineMove("low");
+    ChartRedraw();
   }
 }

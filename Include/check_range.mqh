@@ -26,9 +26,33 @@ void update_global_bar_data()
       // パターンD
       comparativeHigh = latest_bar_high;
       comparativeLow = latest_bar_low;
-      // 包み足は転換点の候補になる
-      nextTurningHigh = latest_bar_high;
-      nextTurningLow = latest_bar_low;
+      if (barDirection == "above") {
+        nextTurningHigh = latest_bar_high;
+        // ↓DMA3*3の確認以前に更新が必要なケース
+        if (nextTurningLow > latest_bar_low) {
+          nextTurningLow = latest_bar_low;
+        } else {
+          // 最新足の安値がDMA3*3を下抜けている場合
+          if (dma3Buffer[1] > latest_bar_low) {
+            nextTurningLow = latest_bar_low;
+          }
+        }
+      } else if (barDirection == "below") {
+        nextTurningLow = latest_bar_low;
+        // ↓DMA3*3の確認以前に更新が必要なケース
+        if (nextTurningHigh < latest_bar_high) {
+          nextTurningHigh = latest_bar_high;
+        } else {
+          // 最新足の高値がDMA3*3を上抜けている場合
+          if (dma3Buffer[1] < latest_bar_high) {
+            nextTurningHigh = latest_bar_high;
+          }
+        }
+      } else if (barDirection == "both") {
+        // 基本的にありえない。包み足の次に更に包み足になるということ。
+        nextTurningHigh = latest_bar_high;
+        nextTurningLow = latest_bar_low;
+      }
       barDirection = "both";
     } else {
       // パターンA
@@ -64,21 +88,6 @@ bool is_range_broken()
     is_updated = true;
     previousDirectionOfBreakout = currentDirectionOfBreakout;
     currentDirectionOfBreakout = "both";
-    // この足がレンジになる
-    highOfRange = latest_bar_high;
-    lowOfRange = latest_bar_low;
-    // update_global_bar_data()のパターンDと同様にデータ格納
-    comparativeHigh = latest_bar_high;
-    comparativeLow = latest_bar_low;
-    nextTurningHigh = latest_bar_high;
-    nextTurningLow = latest_bar_low;
-    barDirection = "both";
-    // // Print("★レンジをどちらにも抜けた");
-    // Print("★レンジ上限： ", highOfRange);
-    // Print("★レンジ下限： ", lowOfRange);
-    LineMove("high");
-    LineMove("low");
-    ChartRedraw();
   }
 
   if(is_updated == false && latest_bar_high > highOfRange){
@@ -113,14 +122,20 @@ bool is_range_confirmed()
       // 高値更新
       if (latest_bar_low < comparativeLow) {
         // パターンD
-        highOfRange = latest_bar_high;
-        // lowOfRangeは格納済み（update_range_of_turning_point）
-        is_confirmed = true;
-        // Print("★レンジ確定（包み足）");
-        // Print("レンジ上限： ", highOfRange);
-        // Print("レンジ下限： ", lowOfRange);
-        LineMove("high");
-        ChartRedraw();
+        if (dma3Buffer[1] > latest_bar_low) {
+          // 最新足の安値がDMA3*3を下抜けている場合
+          highOfRange = latest_bar_high;
+          // lowOfRangeは格納済み（update_range_of_turning_point）
+          is_confirmed = true;
+          // Print("★レンジ確定（包み足）");
+          // Print("レンジ上限： ", highOfRange);
+          // Print("レンジ下限： ", lowOfRange);
+          LineMove("high");
+          ChartRedraw();
+        } else {
+          // 最新足の安値がDMA3*3を下抜けていない場合
+          is_confirmed = false;
+        }
       } else {
         // パターンA
         is_confirmed = false;
@@ -147,14 +162,20 @@ bool is_range_confirmed()
       // 安値更新
       if (latest_bar_high > comparativeHigh) {
         // パターンD
-        lowOfRange = latest_bar_low;
-        // highOfRangeは格納済み（update_range_of_turning_point）
-        is_confirmed = true;
-        // Print("★レンジ確定(包み足)");
-        // Print("レンジ下限： ", lowOfRange);
-        // Print("レンジ上限： ", highOfRange);
-        LineMove("low");
-        ChartRedraw();
+        if (dma3Buffer[1] < latest_bar_high) {
+          // 最新足の高値がDMA3*3を上抜けている場合
+          lowOfRange = latest_bar_low;
+          // highOfRangeは格納済み（update_range_of_turning_point）
+          is_confirmed = true;
+          // Print("★レンジ確定(包み足)");
+          // Print("レンジ下限： ", lowOfRange);
+          // Print("レンジ上限： ", highOfRange);
+          LineMove("low");
+          ChartRedraw();
+        } else {
+          // 最新足の高値がDMA3*3を上抜けていない場合
+          is_confirmed = false;
+        }
       } else {
         // パターンB
         is_confirmed = false;

@@ -94,8 +94,6 @@ MqlTradeResult result;
 // 市場閉鎖でSendOrderがエラー発生した場合true
 // cancel_opposite_orderでのみ発生している前提のロジックとなっている。
 bool isMarketClosed;
-bool isBrokenSameTime;
-bool isBrokenSameTimeForLong;
 double EffectiveLeverage;
 // int fillType;
 double dma3Buffer[];
@@ -132,8 +130,6 @@ int OnInit()
   lastBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
   lastLongBarTime = iTime(_Symbol, PERIOD_W1, 0);
   isMarketClosed = false;
-  isBrokenSameTime = false;
-  isBrokenSameTimeForLong = false;
   EffectiveLeverage = 0.0;
   // fillType = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
   LineCreate("high");
@@ -185,7 +181,6 @@ void OnTick()
     if (currentBarTime == lastBarTime) return;
 
     lastBarTime = currentBarTime;
-    isBrokenSameTime = false;
     check_effective_leverage();
   } else {
     // 市場閉鎖してても5分後くらいに開場される。
@@ -202,8 +197,8 @@ void OnTick()
   if(isInRange){
     if (!isMarketClosed) {
       if(is_range_broken()){
-        // update_global_bar_data()はレンジ確定処理とか転換点導出などを実行してから
-        isBrokenSameTime = true;
+        update_global_bar_data();
+        update_range_of_turning_point();
         comment_global_value();
       } else {
         update_global_bar_data();
@@ -216,29 +211,35 @@ void OnTick()
       cancel_opposite_order(); // 市場閉鎖エラーハンドリングあり
       if (isMarketClosed) return;
 
-      // これが実行されるときにはすでに反対側のポジションは全部損切り済みのはずだが、念の為
-      if(isBrokenOpposite()) close_opposite_positions();
+      if(isBrokenOpposite()) {
+        // 全部損切り済みのはずだが念の為
+        close_opposite_positions();
+        // 新しく建ったポジションの損切りラインを更新するため
+        update_all_stop_loss();
+      } else {
+        // 全てのポジションの損切りラインを更新するため
+        update_all_stop_loss();
+      }
       isInRange = false;
     } else {
       // ↓基本的に発生しない想定。
       close_all_positions(); // 市場閉鎖エラーハンドリングあり
       if (isMarketClosed) return;
 
-      // update_global_bar_dataは実行しない。is_range_broken内で更新するため。
-      comment_global_value();
       isInRange = true; // ブレイク足自体が新しいレンジとなる
     }
+    comment_global_value();
+    // MEMO: レンジブレイクした足が「包み足」＆「DMA3*3抜け」でもレンジ確定しない。
+    // →レンジ確定チェックは次の足からで良いので、ここで一旦returnする。
+    // →Fixerを適応するかどうかを様子を見ながら目視で判断する。
+    return;
   }
 
   if(!isInRange){
     if(!isMarketClosed){
       bool result_bool;
+      // ↓確定した場合はレンジ高値/安値を更新する
       result_bool = is_range_confirmed();
-      if(isBrokenSameTime) { // レンジブレイクした直後
-        update_range_of_turning_point();
-        // ↓市場閉鎖エラーはない。cancel_opposite_order()で送信成功するまで繰り返すため。
-        update_all_stop_loss();
-      }
       update_global_bar_data();
       comment_global_value();
       if(result_bool == false) return;
@@ -304,6 +305,6 @@ void comment_global_value() {
   string long_range_in_or_out = isInLongRange ? "(Within Range)" : "(Breaking)";
 
   // グローバル変数名をDailyとWeeklyに更新して、グローバル変数のまま出力する
-  Comment(StringFormat("EffectiveLeverage: %f\nDaily Range: %s / High = %f / Low = %f\nDaily Breakout Direction: Previous = %s / Current = %s\nDaily Turning Point Candidate: High = %f / Low = %f\nDaily Comparative Bar: High = %f / Low = %f\nDirection of Latest Daily Bar: %s\n\nWeekly Range: %s / High = %f / Low = %f\nWeekly Breakout Direction: Previous = %s / Current = %s\nWeekly Turning Point Candidate: High = %f / Low = %f\nWeekly Comparative Bar: High = %f / Low = %f\nDirection of Latest Weekly Bar: %s", EffectiveLeverage, daily_range_in_or_out, highOfRange, lowOfRange, previousDirectionOfBreakout, currentDirectionOfBreakout, nextTurningHigh, nextTurningLow, comparativeHigh, comparativeLow, barDirection, long_range_in_or_out, highOfLongRange, lowOfLongRange, previousLongDirectionOfBreakout, currentLongDirectionOfBreakout, nextTurningLongHigh, nextTurningLongLow, comparativeLongHigh, comparativeLongLow, longBarDirection));
+  Comment(StringFormat("EffectiveLeverage: %f\nDaily Range: %s / High = %f / Low = %f\nDaily Breakout Direction: Previous = %s / Current = %s\nDaily Turning Point Candidate: High = %f / Low = %f\nDaily Comparative Bar: High = %f / Low = %f\nDirection of Latest Daily Bar: %s\nDMA3*3 average: %f\n\nWeekly Range: %s / High = %f / Low = %f\nWeekly Breakout Direction: Previous = %s / Current = %s\nWeekly Turning Point Candidate: High = %f / Low = %f\nWeekly Comparative Bar: High = %f / Low = %f\nDirection of Latest Weekly Bar: %s\nDMA25*5 average: %f", EffectiveLeverage, daily_range_in_or_out, highOfRange, lowOfRange, previousDirectionOfBreakout, currentDirectionOfBreakout, nextTurningHigh, nextTurningLow, comparativeHigh, comparativeLow, barDirection, dma3Buffer[1], long_range_in_or_out, highOfLongRange, lowOfLongRange, previousLongDirectionOfBreakout, currentLongDirectionOfBreakout, nextTurningLongHigh, nextTurningLongLow, comparativeLongHigh, comparativeLongLow, longBarDirection, dma25Buffer[1]));
 
 }

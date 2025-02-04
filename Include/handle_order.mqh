@@ -73,8 +73,6 @@ void update_all_stop_loss()
       expected_type = POSITION_TYPE_SELL;
     } else {
       Print("★update_all_stop_loss: Logic's fucked up!!! 1");
-      Print("type(0=buy, 1=sell): ", type);
-      Print("currentDirection: ", currentDirectionOfBreakout);
       continue;
     }
 

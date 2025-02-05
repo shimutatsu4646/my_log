@@ -22,7 +22,7 @@ void update_global_long_bar_data()
           nextTurningLongLow = latest_bar_low;
         } else {
           // 最新足の安値がDMA25*5を下抜けている場合
-          if (dma25Buffer[1] > latest_bar_low) {
+          if (dma25Buffer[0] > latest_bar_low) {
             nextTurningLongLow = latest_bar_low;
           }
         }
@@ -33,7 +33,7 @@ void update_global_long_bar_data()
           nextTurningLongHigh = latest_bar_high;
         } else {
           // 最新足の高値がDMA25*5を上抜けている場合
-          if (dma25Buffer[1] < latest_bar_high) {
+          if (dma25Buffer[0] < latest_bar_high) {
             nextTurningLongHigh = latest_bar_high;
           }
         }
@@ -111,7 +111,7 @@ bool is_long_range_confirmed()
       // 高値更新
       if (latest_bar_low < comparativeLongLow) {
         // パターンD
-        if (dma25Buffer[1] > latest_bar_low) {
+        if (dma25Buffer[0] > latest_bar_low) {
           // 最新足の安値がDMA25*5を下抜けている場合
           highOfLongRange = latest_bar_high;
           is_confirmed = true;
@@ -150,7 +150,7 @@ bool is_long_range_confirmed()
       // 安値更新
       if (latest_bar_high > comparativeLongHigh) {
         // パターンD
-        if (dma25Buffer[1] < latest_bar_high) {
+        if (dma25Buffer[0] < latest_bar_high) {
           // 最新足の高値がDMA25*5を上抜けている場合
           lowOfLongRange = latest_bar_low;
           is_confirmed = true;

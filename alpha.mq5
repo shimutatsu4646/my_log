@@ -8,22 +8,6 @@
 #property link      "https://www.mql5.com"
 #property version   "1.00"
 
-#property indicator_buffers 3
-#property indicator_plots   3
-// dma 期間-シフト
-// dma 3-3
-#property indicator_label1  "SMA(3)"
-#property indicator_type1   DRAW_LINE
-#property indicator_style1  STYLE_SOLID
-// dma 7-5
-#property indicator_label2  "SMA(7)"
-#property indicator_type2   DRAW_LINE
-#property indicator_style2  STYLE_SOLID
-// dma 25-5
-#property indicator_label3  "SMA(25)"
-#property indicator_type3   DRAW_LINE
-#property indicator_style3  STYLE_SOLID
-
 #include <MyCode/range_line.mqh>
 #include <MyCode/long_range_line.mqh>
 #include <MyCode/print_error.mqh>
@@ -96,6 +80,7 @@ MqlTradeResult result;
 bool isMarketClosed;
 double EffectiveLeverage;
 // int fillType;
+// ↓iMAで取得したデータをぶち込む
 double dma3Buffer[];
 double dma7Buffer[];
 double dma25Buffer[];
@@ -138,36 +123,13 @@ int OnInit()
   LongLineCreate("low");
   ChartRedraw();
 
-  // バッファの設定（順序が重要）
-  SetIndexBuffer(0, dma3Buffer, INDICATOR_DATA);
-  SetIndexBuffer(1, dma7Buffer, INDICATOR_DATA);
-  SetIndexBuffer(2, dma25Buffer, INDICATOR_DATA);
-
   // 移動平均線のハンドルを取得
+  // ↓これだけで表示が可能
   ma3Handle = iMA(_Symbol, PERIOD_CURRENT, 3, 3, MODE_SMA, PRICE_CLOSE);
   ma7Handle = iMA(_Symbol, PERIOD_CURRENT, 7, 5, MODE_SMA, PRICE_CLOSE);
   ma25Handle = iMA(_Symbol, PERIOD_CURRENT, 25, 5, MODE_SMA, PRICE_CLOSE);
 
   return(INIT_SUCCEEDED);
-}
-
-int OnCalculate(const int rates_total,
-                const int prev_calculated,
-                const datetime &time[],
-                const double &open[],
-                const double &high[],
-                const double &low[],
-                const double &close[],
-                const long &tick_volume[],
-                const long &volume[],
-                const int &spread[])
-{
-  // 移動平均値をバッファにコピー
-  if(CopyBuffer(ma3Handle, 0, 0, rates_total, dma3Buffer) <= 0) return(0);
-  if(CopyBuffer(ma7Handle, 0, 0, rates_total, dma7Buffer) <= 0) return(0);
-  if(CopyBuffer(ma25Handle, 0, 0, rates_total, dma25Buffer) <= 0) return(0);
-
-  return(rates_total);
 }
 
 void OnTick()
@@ -190,6 +152,12 @@ void OnTick()
       lastBarTime = currentBarTime;
     }
   }
+
+  // ↓値を取得できるようにコピーするだけ。一日一回更新すればいい。
+  // [0]は１つ前の足の平均値、[1]は現在進行系で変動している足の平均値
+  CopyBuffer(ma3Handle, 0, 0, 2, dma3Buffer);
+  CopyBuffer(ma7Handle, 0, 0, 2, dma7Buffer);
+  CopyBuffer(ma25Handle, 0, 0, 2, dma25Buffer);
 
   ZeroMemory(request);
   ZeroMemory(result);
@@ -306,6 +274,6 @@ void comment_global_value() {
   string long_range_in_or_out = isInLongRange ? "(Within Range)" : "(Breaking)";
 
   // グローバル変数名をDailyとWeeklyに更新して、グローバル変数のまま出力する
-  Comment(StringFormat("EffectiveLeverage: %f\nDaily Range: %s / High = %f / Low = %f\nDaily Breakout Direction: Previous = %s / Current = %s\nDaily Turning Point Candidate: High = %f / Low = %f\nDaily Comparative Bar: High = %f / Low = %f\nDirection of Latest Daily Bar: %s\nDMA3*3 average: %f\n\nWeekly Range: %s / High = %f / Low = %f\nWeekly Breakout Direction: Previous = %s / Current = %s\nWeekly Turning Point Candidate: High = %f / Low = %f\nWeekly Comparative Bar: High = %f / Low = %f\nDirection of Latest Weekly Bar: %s\nDMA25*5 average: %f", EffectiveLeverage, daily_range_in_or_out, highOfRange, lowOfRange, previousDirectionOfBreakout, currentDirectionOfBreakout, nextTurningHigh, nextTurningLow, comparativeHigh, comparativeLow, barDirection, dma3Buffer[1], long_range_in_or_out, highOfLongRange, lowOfLongRange, previousLongDirectionOfBreakout, currentLongDirectionOfBreakout, nextTurningLongHigh, nextTurningLongLow, comparativeLongHigh, comparativeLongLow, longBarDirection, dma25Buffer[1]));
+  Comment(StringFormat("EffectiveLeverage: %f\nDaily Range: %s / High = %f / Low = %f\nDaily Breakout Direction: Previous = %s / Current = %s\nDaily Turning Point Candidate: High = %f / Low = %f\nDaily Comparative Bar: High = %f / Low = %f\nDirection of Latest Daily Bar: %s\nDMA3*3 average: %f\n\nWeekly Range: %s / High = %f / Low = %f\nWeekly Breakout Direction: Previous = %s / Current = %s\nWeekly Turning Point Candidate: High = %f / Low = %f\nWeekly Comparative Bar: High = %f / Low = %f\nDirection of Latest Weekly Bar: %s\nDMA25*5 average: %f", EffectiveLeverage, daily_range_in_or_out, highOfRange, lowOfRange, previousDirectionOfBreakout, currentDirectionOfBreakout, nextTurningHigh, nextTurningLow, comparativeHigh, comparativeLow, barDirection, dma3Buffer[0], long_range_in_or_out, highOfLongRange, lowOfLongRange, previousLongDirectionOfBreakout, currentLongDirectionOfBreakout, nextTurningLongHigh, nextTurningLongLow, comparativeLongHigh, comparativeLongLow, longBarDirection, dma25Buffer[0]));
 
 }

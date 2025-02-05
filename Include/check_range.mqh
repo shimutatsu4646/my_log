@@ -33,7 +33,7 @@ void update_global_bar_data()
           nextTurningLow = latest_bar_low;
         } else {
           // 最新足の安値がDMA3*3を下抜けている場合
-          if (dma3Buffer[1] > latest_bar_low) {
+          if (dma3Buffer[0] > latest_bar_low) {
             nextTurningLow = latest_bar_low;
           }
         }
@@ -44,7 +44,7 @@ void update_global_bar_data()
           nextTurningHigh = latest_bar_high;
         } else {
           // 最新足の高値がDMA3*3を上抜けている場合
-          if (dma3Buffer[1] < latest_bar_high) {
+          if (dma3Buffer[0] < latest_bar_high) {
             nextTurningHigh = latest_bar_high;
           }
         }
@@ -122,7 +122,7 @@ bool is_range_confirmed()
       // 高値更新
       if (latest_bar_low < comparativeLow) {
         // パターンD
-        if (dma3Buffer[1] > latest_bar_low) {
+        if (dma3Buffer[0] > latest_bar_low) {
           // 最新足の安値がDMA3*3を下抜けている場合
           highOfRange = latest_bar_high;
           // lowOfRangeは格納済み（update_range_of_turning_point）
@@ -162,7 +162,7 @@ bool is_range_confirmed()
       // 安値更新
       if (latest_bar_high > comparativeHigh) {
         // パターンD
-        if (dma3Buffer[1] < latest_bar_high) {
+        if (dma3Buffer[0] < latest_bar_high) {
           // 最新足の高値がDMA3*3を上抜けている場合
           lowOfRange = latest_bar_low;
           // highOfRangeは格納済み（update_range_of_turning_point）

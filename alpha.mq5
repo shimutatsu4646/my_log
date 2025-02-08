@@ -165,11 +165,8 @@ void OnTick()
   if(isInRange){
     if (!isMarketClosed) {
       if(is_range_broken()){
-        // ↓先にレンジ更新する。この順番が重要。
-          // レンジブレイクした足が転換点候補になるケースでも、
-          // 一つ前のnextTurningが次のレンジになる
-        update_range_of_turning_point();
         update_global_bar_data();
+        update_range_of_turning_point();
         comment_global_value();
       } else {
         update_global_bar_data();
@@ -239,8 +236,8 @@ void change_long_timebar_data() {
     lastLongBarTime = currentLongBarTime;
     if(isInLongRange) {
       if(is_long_range_broken()){
-        update_long_range_of_turning_point();
         update_global_long_bar_data();
+        update_long_range_of_turning_point();
       } else {
         update_global_long_bar_data();
         return;

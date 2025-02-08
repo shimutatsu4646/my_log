@@ -58,7 +58,12 @@ void update_global_bar_data()
       // パターンA
       comparativeHigh = latest_bar_high;
       comparativeLow = latest_bar_low;
-      nextTurningHigh = latest_bar_high;
+      if (dma3Buffer[0] < latest_bar_high) {
+        // DMA3*3を上抜けている場合のみ転換点候補にする
+        nextTurningHigh = latest_bar_high;
+        // is_range_confirmedではこの条件を入れてない
+        // 一旦レンジ確定で区切ったほうが良いと判断
+      }
       barDirection = "above";
     }
   } else {
@@ -66,7 +71,12 @@ void update_global_bar_data()
       // パターンB
       comparativeHigh = latest_bar_high;
       comparativeLow = latest_bar_low;
-      nextTurningLow = latest_bar_low;
+      if (dma3Buffer[0] > latest_bar_low) {
+        // DMA3*3を下抜けている場合のみ転換点候補にする
+        nextTurningLow = latest_bar_low;
+        // is_range_confirmedではこの条件を入れてない
+        // 一旦レンジ確定で区切ったほうが良いと判断
+      }
       barDirection = "below";
     } else {
       // パターンC

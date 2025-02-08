@@ -47,7 +47,12 @@ void update_global_long_bar_data()
       // パターンA
       comparativeLongHigh = latest_bar_high;
       comparativeLongLow = latest_bar_low;
-      nextTurningLongHigh = latest_bar_high;
+      if (dma25Buffer[0] < latest_bar_high) {
+        // DMA25*5を上抜けている場合のみ転換点候補にする
+        nextTurningLongHigh = latest_bar_high;
+        // is_range_confirmedではこの条件を入れてない
+        // 一旦レンジ確定で区切ったほうが良いと判断
+      }
       longBarDirection = "above";
     }
   } else {
@@ -55,7 +60,12 @@ void update_global_long_bar_data()
       // パターンB
       comparativeLongHigh = latest_bar_high;
       comparativeLongLow = latest_bar_low;
-      nextTurningLongLow = latest_bar_low;
+      if (dma25Buffer[0] > latest_bar_low) {
+        // DMA25*5を下抜けている場合のみ転換点候補にする
+        nextTurningLongLow = latest_bar_low;
+        // is_range_confirmedではこの条件を入れてない
+        // 一旦レンジ確定で区切ったほうが良いと判断
+      }
       longBarDirection = "below";
     } else {
       // パターンC

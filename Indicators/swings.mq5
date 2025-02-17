@@ -33,7 +33,7 @@ int InpSwingHighShift = 10;   // SwingHigh: vertical shift of arrows in pixels
 
 // インプット変数
 input int InputBarsToLookBack = 3000; // 過去何本まで遡るか
-input int InputSwingRange = 6; // 左右何本を比較対象にするか
+input int InputSwingRange = 6; // 左右何本を比較対象にするか（3,4,6,10）
 
 //--- indicator buffers
 double SwingLowBuffer[];

@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Rajesh Nait, Copyright 2023"
 #property link      "https://www.mql5.com/en/users/rajeshnait/seller"
-#property version   "1.00"
+#property version   "1.01"
 #property indicator_chart_window
 #property indicator_buffers 2
 #property indicator_plots   2
@@ -30,6 +30,11 @@ int InpSwingLowShift = 10;   // Swing Low: vertical shift of arrows in pixels
 input group "Swing High"
 uchar InpSwingHighCode = 110; // SwingHigh: code for style DRAW_ARROW (font Wingdings)
 int InpSwingHighShift = 10;   // SwingHigh: vertical shift of arrows in pixels
+
+// インプット変数
+input int InputBarsToLookBack = 3000; // 過去何本まで遡るか
+input int InputSwingRange = 6; // 左右何本を比較対象にするか
+
 //--- indicator buffers
 double SwingLowBuffer[];
 double SwingHighBuffer[];
@@ -68,24 +73,24 @@ int OnCalculate(const int rates_total,
                 const long &volume[],
                 const int &spread[]) {
     //---
-    if (rates_total < 13)
+    if (rates_total < InputSwingRange * 2 + 1)
         return (0);
 
-    //--- 過去1000本まで遡る
-    int limit = MathMax(6, rates_total - 1000);
+    //--- 過去InputBarsToLookBack本まで遡る
+    int limit = MathMax(InputSwingRange, rates_total - InputBarsToLookBack);
 
     //--- 初期化をループの外に移動
     SwingHighBuffer[0] = EMPTY_VALUE;
     SwingLowBuffer[0] = EMPTY_VALUE;
 
-    for (int i = limit; i < rates_total - 6; i++) {
+    for (int i = limit; i < rates_total - InputSwingRange; i++) {
         SwingLowBuffer[i] = 0.0;
         SwingHighBuffer[i] = 0.0;
 
         bool isSwingHigh = true;
         bool isSwingLow = true;
 
-        for (int j = 1; j <= 6; j++) {
+        for (int j = 1; j <= InputSwingRange; j++) {
             //--- Swing High の条件
             if (high[i] <= high[i - j] || high[i] <= high[i + j]) {
                 isSwingHigh = false;
@@ -95,7 +100,7 @@ int OnCalculate(const int rates_total,
         if (isSwingHigh)
             SwingHighBuffer[i] = high[i];
 
-        for (int j = 1; j <= 6; j++) {
+        for (int j = 1; j <= InputSwingRange; j++) {
             //--- Swing Low の条件
             if (low[i] >= low[i - j] || low[i] >= low[i + j]) {
                 isSwingLow = false;

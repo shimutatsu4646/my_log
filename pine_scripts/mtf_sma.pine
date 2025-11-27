@@ -1,0 +1,62 @@
+//@version=6
+indicator(title="Multi-Timeframe SMAs", shorttitle="MTF SMAs", overlay=true, timeframe="", timeframe_gaps=true)
+
+// Base inputs (shared across all four MAs)
+len = input.int(20, minval=1, title="Length")
+src = input(close, title="Source")
+offset = input.int(title="Offset", defval=0, minval=-500, maxval=500, display = display.data_window)
+
+// Smoothing / Bollinger options (shared)
+GRP = "Smoothing"
+TT_BB = "Only applies when 'SMA + Bollinger Bands' is selected. Determines the distance between the SMA and the bands."
+maTypeInput = input.string("None", "Type", options = ["None", "SMA", "SMA + Bollinger Bands", "EMA", "SMMA (RMA)", "WMA", "VWMA"], group = GRP, display = display.data_window)
+isBB = maTypeInput == "SMA + Bollinger Bands"
+maLengthInput = input.int(14, "Length", group = GRP, display = display.data_window, active = maTypeInput != "None")
+bbMultInput = input.float(2.0, "BB StdDev", minval = 0.001, maxval = 50, step = 0.5, tooltip = TT_BB, group = GRP, display = display.data_window, active = isBB)
+enableMA = maTypeInput != "None"
+
+// Smoothing MA Calculation
+ma(source, length, MAtype) =>
+	switch MAtype
+		"SMA"                   => ta.sma(source, length)
+		"SMA + Bollinger Bands" => ta.sma(source, length)
+		"EMA"                   => ta.ema(source, length)
+		"SMMA (RMA)"            => ta.rma(source, length)
+		"WMA"                   => ta.wma(source, length)
+		"VWMA"                  => ta.vwma(source, length)
+
+// Build one timeframe's SMA + optional BB using true TF data
+getMtfSma(tf, gapsSetting=barmerge.gaps_on) =>
+	base = request.security(syminfo.tickerid, tf, ta.sma(src, len), gapsSetting, barmerge.lookahead_off)
+	stdev = isBB ? request.security(syminfo.tickerid, tf, ta.stdev(src, maLengthInput), gapsSetting, barmerge.lookahead_off) * bbMultInput : na
+	mainLine = enableMA ? ma(base, maLengthInput, maTypeInput) : base
+	[mainLine, stdev]
+
+// Compute lines for each timeframe
+[sma5m,  stdev5m]  = getMtfSma("5")
+[sma15m, stdev15m] = getMtfSma("15")
+[sma1h,  stdev1h]  = getMtfSma("60")
+[sma4h,  stdev4h]  = getMtfSma("240", barmerge.gaps_on)
+
+// Plot SMAs (colors adjustable in Style)
+plot5m  = plot(sma5m,  title="SMA 5m",  color=color.blue,   offset=offset)
+plot15m = plot(sma15m, title="SMA 15m", color=color.orange, offset=offset)
+plot1h  = plot(sma1h,  title="SMA 1h",  color=color.teal,   offset=offset)
+plot4h  = plot(sma4h,  title="SMA 4h",  color=color.purple, offset=offset)
+
+// Optional Bollinger Bands (shared settings)
+upper5m = plot(isBB ? sma5m + stdev5m : na, title="Upper Bollinger Band 5m", color=color.blue, display = isBB ? display.all : display.none, editable = isBB, offset=offset)
+lower5m = plot(isBB ? sma5m - stdev5m : na, title="Lower Bollinger Band 5m", color=color.blue, display = isBB ? display.all : display.none, editable = isBB, offset=offset)
+fill(upper5m, lower5m, color= isBB ? color.new(color.blue, 90) : na, title="Bollinger Bands Background Fill 5m", display = isBB ? display.all : display.none, editable = isBB)
+
+upper15m = plot(isBB ? sma15m + stdev15m : na, title="Upper Bollinger Band 15m", color=color.orange, display = isBB ? display.all : display.none, editable = isBB, offset=offset)
+lower15m = plot(isBB ? sma15m - stdev15m : na, title="Lower Bollinger Band 15m", color=color.orange, display = isBB ? display.all : display.none, editable = isBB, offset=offset)
+fill(upper15m, lower15m, color= isBB ? color.new(color.orange, 90) : na, title="Bollinger Bands Background Fill 15m", display = isBB ? display.all : display.none, editable = isBB)
+
+upper1h = plot(isBB ? sma1h + stdev1h : na, title="Upper Bollinger Band 1h", color=color.teal, display = isBB ? display.all : display.none, editable = isBB, offset=offset)
+lower1h = plot(isBB ? sma1h - stdev1h : na, title="Lower Bollinger Band 1h", color=color.teal, display = isBB ? display.all : display.none, editable = isBB, offset=offset)
+fill(upper1h, lower1h, color= isBB ? color.new(color.teal, 90) : na, title="Bollinger Bands Background Fill 1h", display = isBB ? display.all : display.none, editable = isBB)
+
+upper4h = plot(isBB ? sma4h + stdev4h : na, title="Upper Bollinger Band 4h", color=color.purple, display = isBB ? display.all : display.none, editable = isBB, offset=offset)
+lower4h = plot(isBB ? sma4h - stdev4h : na, title="Lower Bollinger Band 4h", color=color.purple, display = isBB ? display.all : display.none, editable = isBB, offset=offset)
+fill(upper4h, lower4h, color= isBB ? color.new(color.purple, 90) : na, title="Bollinger Bands Background Fill 4h", display = isBB ? display.all : display.none, editable = isBB)

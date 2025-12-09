@@ -8,22 +8,6 @@
 #property link      "https://www.mql5.com"
 #property version   "1.00"
 
-#property indicator_buffers 3
-#property indicator_plots   3
-// dma 期間-シフト
-// dma 3-3
-#property indicator_label1  "SMA(3)"
-#property indicator_type1   DRAW_LINE
-#property indicator_style1  STYLE_SOLID
-// dma 7-5
-#property indicator_label2  "SMA(7)"
-#property indicator_type2   DRAW_LINE
-#property indicator_style2  STYLE_SOLID
-// dma 25-5
-#property indicator_label3  "SMA(25)"
-#property indicator_type3   DRAW_LINE
-#property indicator_style3  STYLE_SOLID
-
 #include <MyCode/range_line.mqh>
 #include <MyCode/long_range_line.mqh>
 #include <MyCode/print_error.mqh>
@@ -94,10 +78,9 @@ MqlTradeResult result;
 // 市場閉鎖でSendOrderがエラー発生した場合true
 // cancel_opposite_orderでのみ発生している前提のロジックとなっている。
 bool isMarketClosed;
-bool isBrokenSameTime;
-bool isBrokenSameTimeForLong;
 double EffectiveLeverage;
 // int fillType;
+// ↓iMAで取得したデータをぶち込む
 double dma3Buffer[];
 double dma7Buffer[];
 double dma25Buffer[];
@@ -132,8 +115,6 @@ int OnInit()
   lastBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
   lastLongBarTime = iTime(_Symbol, PERIOD_W1, 0);
   isMarketClosed = false;
-  isBrokenSameTime = false;
-  isBrokenSameTimeForLong = false;
   EffectiveLeverage = 0.0;
   // fillType = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
   LineCreate("high");
@@ -142,36 +123,13 @@ int OnInit()
   LongLineCreate("low");
   ChartRedraw();
 
-  // バッファの設定（順序が重要）
-  SetIndexBuffer(0, dma3Buffer, INDICATOR_DATA);
-  SetIndexBuffer(1, dma7Buffer, INDICATOR_DATA);
-  SetIndexBuffer(2, dma25Buffer, INDICATOR_DATA);
-
   // 移動平均線のハンドルを取得
+  // ↓これだけで表示が可能
   ma3Handle = iMA(_Symbol, PERIOD_CURRENT, 3, 3, MODE_SMA, PRICE_CLOSE);
   ma7Handle = iMA(_Symbol, PERIOD_CURRENT, 7, 5, MODE_SMA, PRICE_CLOSE);
   ma25Handle = iMA(_Symbol, PERIOD_CURRENT, 25, 5, MODE_SMA, PRICE_CLOSE);
 
   return(INIT_SUCCEEDED);
-}
-
-int OnCalculate(const int rates_total,
-                const int prev_calculated,
-                const datetime &time[],
-                const double &open[],
-                const double &high[],
-                const double &low[],
-                const double &close[],
-                const long &tick_volume[],
-                const long &volume[],
-                const int &spread[])
-{
-  // 移動平均値をバッファにコピー
-  if(CopyBuffer(ma3Handle, 0, 0, rates_total, dma3Buffer) <= 0) return(0);
-  if(CopyBuffer(ma7Handle, 0, 0, rates_total, dma7Buffer) <= 0) return(0);
-  if(CopyBuffer(ma25Handle, 0, 0, rates_total, dma25Buffer) <= 0) return(0);
-
-  return(rates_total);
 }
 
 void OnTick()
@@ -185,7 +143,6 @@ void OnTick()
     if (currentBarTime == lastBarTime) return;
 
     lastBarTime = currentBarTime;
-    isBrokenSameTime = false;
     check_effective_leverage();
   } else {
     // 市場閉鎖してても5分後くらいに開場される。
@@ -196,14 +153,20 @@ void OnTick()
     }
   }
 
+  // ↓値を取得できるようにコピーするだけ。一日一回更新すればいい。
+  // [0]は１つ前の足の平均値、[1]は現在進行系で変動している足の平均値
+  CopyBuffer(ma3Handle, 0, 0, 2, dma3Buffer);
+  CopyBuffer(ma7Handle, 0, 0, 2, dma7Buffer);
+  CopyBuffer(ma25Handle, 0, 0, 2, dma25Buffer);
+
   ZeroMemory(request);
   ZeroMemory(result);
 
   if(isInRange){
     if (!isMarketClosed) {
       if(is_range_broken()){
-        // update_global_bar_data()はレンジ確定処理とか転換点導出などを実行してから
-        isBrokenSameTime = true;
+        update_global_bar_data();
+        update_range_of_turning_point();
         comment_global_value();
       } else {
         update_global_bar_data();
@@ -216,28 +179,35 @@ void OnTick()
       cancel_opposite_order(); // 市場閉鎖エラーハンドリングあり
       if (isMarketClosed) return;
 
-      if(isBrokenOpposite()) close_opposite_positions();
+      if(isBrokenOpposite()) {
+        // 全部損切り済みのはずだが念の為
+        close_opposite_positions();
+        // 新しく建ったポジションの損切りラインを更新するため
+        update_all_stop_loss();
+      } else {
+        // 全てのポジションの損切りラインを更新するため
+        update_all_stop_loss();
+      }
       isInRange = false;
     } else {
       // ↓基本的に発生しない想定。
       close_all_positions(); // 市場閉鎖エラーハンドリングあり
       if (isMarketClosed) return;
 
-      // update_global_bar_dataは実行しない。is_range_broken内で更新するため。
-      comment_global_value();
       isInRange = true; // ブレイク足自体が新しいレンジとなる
     }
+    comment_global_value();
+    // MEMO: レンジブレイクした足が「包み足」＆「DMA3*3抜け」でもレンジ確定しない。
+    // →レンジ確定チェックは次の足からで良いので、ここで一旦returnする。
+    // →Fixerを適応するかどうかを様子を見ながら目視で判断する。
+    return;
   }
 
   if(!isInRange){
     if(!isMarketClosed){
       bool result_bool;
+      // ↓確定した場合はレンジ高値/安値を更新する
       result_bool = is_range_confirmed();
-      if(isBrokenSameTime) { // レンジブレイクした直後
-        update_range_of_turning_point();
-        // ↓市場閉鎖エラーはない。cancel_opposite_order()で送信成功するまで繰り返すため。
-        update_all_stop_loss();
-      }
       update_global_bar_data();
       comment_global_value();
       if(result_bool == false) return;
@@ -264,10 +234,10 @@ void change_long_timebar_data() {
   datetime currentLongBarTime = iTime(_Symbol, PERIOD_W1, 0);
   if(currentLongBarTime != lastLongBarTime) {
     lastLongBarTime = currentLongBarTime;
-    isBrokenSameTimeForLong = false;
     if(isInLongRange) {
       if(is_long_range_broken()){
-        isBrokenSameTimeForLong = true;
+        update_global_long_bar_data();
+        update_long_range_of_turning_point();
       } else {
         update_global_long_bar_data();
         return;
@@ -280,14 +250,12 @@ void change_long_timebar_data() {
         // update_global_bar_dataは実行しない。is_range_broken内で更新するため。
         isInLongRange = true;
       }
+      return;
     }
 
     if(!isInLongRange){
       bool result_bool;
       result_bool = is_long_range_confirmed();
-      if(isBrokenSameTimeForLong) {
-        update_long_range_of_turning_point();
-      }
       update_global_long_bar_data();
       if(result_bool == false) return;
 
@@ -303,6 +271,6 @@ void comment_global_value() {
   string long_range_in_or_out = isInLongRange ? "(Within Range)" : "(Breaking)";
 
   // グローバル変数名をDailyとWeeklyに更新して、グローバル変数のまま出力する
-  Comment(StringFormat("EffectiveLeverage: %f\nDaily Range: %s / High = %f / Low = %f\nDaily Breakout Direction: Previous = %s / Current = %s\nDaily Turning Point Candidate: High = %f / Low = %f\nDaily Comparative Bar: High = %f / Low = %f\nDirection of Latest Daily Bar: %s\n\nWeekly Range: %s / High = %f / Low = %f\nWeekly Breakout Direction: Previous = %s / Current = %s\nWeekly Turning Point Candidate: High = %f / Low = %f\nWeekly Comparative Bar: High = %f / Low = %f\nDirection of Latest Weekly Bar: %s", EffectiveLeverage, daily_range_in_or_out, highOfRange, lowOfRange, previousDirectionOfBreakout, currentDirectionOfBreakout, nextTurningHigh, nextTurningLow, comparativeHigh, comparativeLow, barDirection, long_range_in_or_out, highOfLongRange, lowOfLongRange, previousLongDirectionOfBreakout, currentLongDirectionOfBreakout, nextTurningLongHigh, nextTurningLongLow, comparativeLongHigh, comparativeLongLow, longBarDirection));
+  Comment(StringFormat("EffectiveLeverage: %f\nDaily Range: %s / High = %f / Low = %f\nDaily Breakout Direction: Previous = %s / Current = %s\nDaily Turning Point Candidate: High = %f / Low = %f\nDaily Comparative Bar: High = %f / Low = %f\nDirection of Latest Daily Bar: %s\nDMA3*3 average: %f\n\nWeekly Range: %s / High = %f / Low = %f\nWeekly Breakout Direction: Previous = %s / Current = %s\nWeekly Turning Point Candidate: High = %f / Low = %f\nWeekly Comparative Bar: High = %f / Low = %f\nDirection of Latest Weekly Bar: %s\nDMA25*5 average: %f", EffectiveLeverage, daily_range_in_or_out, highOfRange, lowOfRange, previousDirectionOfBreakout, currentDirectionOfBreakout, nextTurningHigh, nextTurningLow, comparativeHigh, comparativeLow, barDirection, dma3Buffer[0], long_range_in_or_out, highOfLongRange, lowOfLongRange, previousLongDirectionOfBreakout, currentLongDirectionOfBreakout, nextTurningLongHigh, nextTurningLongLow, comparativeLongHigh, comparativeLongLow, longBarDirection, dma25Buffer[0]));
 
 }

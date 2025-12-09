@@ -120,19 +120,20 @@ void check_effective_leverage()
   for(int i = 0; i < totalPositions; i++)
   {
     ulong position_ticket = PositionGetTicket(i);
-    Print("ポジションチケット: ", position_ticket);
+    // Print("ポジションチケット: ", position_ticket);
     double volume = PositionGetDouble(POSITION_VOLUME);
-    Print("ロット: ", volume);
+    // Print("ロット: ", volume);
     double price = PositionGetDouble(POSITION_PRICE_OPEN);
-    Print("値段: ", price);
+    // Print("値段: ", price);
     totalTradeAmount += volume * amount_currency_of_one_lot  * price;
   }
-  Print("総取引金額", totalTradeAmount);
+  // Print("総取引金額", totalTradeAmount);
 
   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
   double effective_leverage = totalTradeAmount / equity;
-  Print("実効レバレッジ: ",  effective_leverage);
+  EffectiveLeverage = effective_leverage;
+  // Print("実効レバレッジ: ",  effective_leverage);
   if (effective_leverage >= 10){
-    Print("！！！！！実効レバレッジが10倍以上！！！！！");
+    // Print("！！！！！実効レバレッジが10倍以上！！！！！");
   }
 }

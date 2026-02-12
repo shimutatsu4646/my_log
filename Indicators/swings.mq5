@@ -16,13 +16,13 @@ input int InputSwingRange = 3; // 左右何本を比較対象にするか（3,4,
 
 const color InpSwingHighColor = clrAqua;
 const color InpSwingLowColor = clrPink;
-const color InpWeeklySwingHighColor = clrBlue;
-const color InpWeeklySwingLowColor = clrRed;
+const color InpLongTermSwingHighColor = clrBlue;
+const color InpLongTermSwingLowColor = clrRed;
 const int InpLabelOffsetPoints = 100;
-const int InpWeeklyLabelOffsetPoints = 300;
-const int InpBoxHalfHeightPoints = 50;
+const int InpLongTermLabelOffsetPoints = 300;
+const int InpBoxHalfHeightPoints = 70;
 const string SwingDailyObjectPrefix = "SWING_BOX_D1_";
-const string SwingWeeklyObjectPrefix = "SWING_BOX_W1_";
+const string SwingLongTermObjectPrefix = "SWING_BOX_LONGTERM_";
 //+------------------------------------------------------------------+
 //| Custom indicator initialization function                         |
 //+------------------------------------------------------------------+
@@ -34,7 +34,7 @@ int OnInit() {
 void OnDeinit(const int reason) {
     for (int i = ObjectsTotal(0, 0, -1) - 1; i >= 0; i--) {
         string name = ObjectName(0, i, 0, -1);
-        if (StringFind(name, SwingDailyObjectPrefix) == 0 || StringFind(name, SwingWeeklyObjectPrefix) == 0)
+        if (StringFind(name, SwingDailyObjectPrefix) == 0 || StringFind(name, SwingLongTermObjectPrefix) == 0)
             ObjectDelete(0, name);
     }
 }
@@ -64,6 +64,25 @@ void UpsertSwingObject(const string name, const color box_color, const datetime 
     ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
     ObjectSetInteger(0, name, OBJPROP_SELECTED, false);
     ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+}
+
+ENUM_TIMEFRAMES GetLongTermTimeframe(const ENUM_TIMEFRAMES chart_tf) {
+    switch (chart_tf) {
+        case PERIOD_M5:
+            return PERIOD_H1;
+        case PERIOD_M15:
+            return PERIOD_H1;
+        case PERIOD_H1:
+            return PERIOD_H4;
+        case PERIOD_H4:
+            return PERIOD_D1;
+        case PERIOD_D1:
+            return PERIOD_W1;
+        case PERIOD_W1:
+            return PERIOD_MN1;
+        default:
+            return PERIOD_W1;
+    }
 }
 //+------------------------------------------------------------------+
 //| Custom indicator iteration function                              |
@@ -147,44 +166,49 @@ int OnCalculate(const int rates_total,
         }
     }
 
-    //--- 週足のSwingを日足チャート上に重ねて表示（より離すためOffsetは300）
-    datetime weekly_time[];
-    double weekly_high[];
-    double weekly_low[];
-    ArraySetAsSeries(weekly_time, false);
-    ArraySetAsSeries(weekly_high, false);
-    ArraySetAsSeries(weekly_low, false);
+    //--- 上位足のSwingを現在チャート上に重ねて表示（より離すためOffsetは300）
+    ENUM_TIMEFRAMES long_term_tf = GetLongTermTimeframe((ENUM_TIMEFRAMES)_Period);
+    datetime long_term_time[];
+    double long_term_high[];
+    double long_term_low[];
+    ArraySetAsSeries(long_term_time, false);
+    ArraySetAsSeries(long_term_high, false);
+    ArraySetAsSeries(long_term_low, false);
 
-    int weekly_request = MathMax(swing_range * 2 + 1, bars_to_lookback);
-    int copied_time = CopyTime(_Symbol, PERIOD_W1, 0, weekly_request, weekly_time);
-    int copied_high = CopyHigh(_Symbol, PERIOD_W1, 0, weekly_request, weekly_high);
-    int copied_low = CopyLow(_Symbol, PERIOD_W1, 0, weekly_request, weekly_low);
-    int weekly_total = MathMin(copied_time, MathMin(copied_high, copied_low));
+    int long_term_tf_seconds = PeriodSeconds(long_term_tf);
+    if (long_term_tf_seconds <= 0)
+        long_term_tf_seconds = 7 * 86400;
 
-    if (weekly_total >= swing_range * 2 + 1) {
-        for (int i = swing_range; i < weekly_total - swing_range; i++) {
-            bool isWeeklySwingHigh = true;
-            bool isWeeklySwingLow = true;
+    int long_term_request = MathMax(swing_range * 2 + 1, bars_to_lookback);
+    int copied_time = CopyTime(_Symbol, long_term_tf, 0, long_term_request, long_term_time);
+    int copied_high = CopyHigh(_Symbol, long_term_tf, 0, long_term_request, long_term_high);
+    int copied_low = CopyLow(_Symbol, long_term_tf, 0, long_term_request, long_term_low);
+    int long_term_total = MathMin(copied_time, MathMin(copied_high, copied_low));
+
+    if (long_term_total >= swing_range * 2 + 1) {
+        for (int i = swing_range; i < long_term_total - swing_range; i++) {
+            bool isLongTermSwingHigh = true;
+            bool isLongTermSwingLow = true;
 
             for (int j = 1; j <= swing_range; j++) {
-                if (weekly_high[i] <= weekly_high[i - j] || weekly_high[i] <= weekly_high[i + j])
-                    isWeeklySwingHigh = false;
+                if (long_term_high[i] <= long_term_high[i - j] || long_term_high[i] <= long_term_high[i + j])
+                    isLongTermSwingHigh = false;
 
-                if (weekly_low[i] >= weekly_low[i - j] || weekly_low[i] >= weekly_low[i + j])
-                    isWeeklySwingLow = false;
+                if (long_term_low[i] >= long_term_low[i - j] || long_term_low[i] >= long_term_low[i + j])
+                    isLongTermSwingLow = false;
 
-                if (!isWeeklySwingHigh && !isWeeklySwingLow)
+                if (!isLongTermSwingHigh && !isLongTermSwingLow)
                     break;
             }
 
-            if (isWeeklySwingHigh) {
-                datetime week_open = weekly_time[i];
-                datetime week_next_open = (i + 1 < weekly_total) ? weekly_time[i + 1] : (week_open + 7 * 86400);
+            if (isLongTermSwingHigh) {
+                datetime long_term_open = long_term_time[i];
+                datetime long_term_next_open = (i + 1 < long_term_total) ? long_term_time[i + 1] : (long_term_open + long_term_tf_seconds);
                 int day_idx = -1;
                 double max_high = -DBL_MAX;
 
                 for (int d = base_limit; d < rates_total; d++) {
-                    if (time[d] < week_open || time[d] >= week_next_open)
+                    if (time[d] < long_term_open || time[d] >= long_term_next_open)
                         continue;
 
                     if (high[d] > max_high) {
@@ -196,20 +220,20 @@ int OnCalculate(const int rates_total,
                 if (day_idx >= 0) {
                     datetime left_time = time[day_idx];
                     datetime right_time = (day_idx + 1 < rates_total) ? time[day_idx + 1] : (left_time + chart_period_seconds);
-                    string name = MakeSwingObjectName(SwingWeeklyObjectPrefix, true, left_time);
-                    double center = max_high + (double)InpWeeklyLabelOffsetPoints * _Point;
-                    UpsertSwingObject(name, InpWeeklySwingHighColor, left_time, right_time, center);
+                    string name = MakeSwingObjectName(SwingLongTermObjectPrefix, true, left_time);
+                    double center = max_high + (double)InpLongTermLabelOffsetPoints * _Point;
+                    UpsertSwingObject(name, InpLongTermSwingHighColor, left_time, right_time, center);
                 }
             }
 
-            if (isWeeklySwingLow) {
-                datetime week_open = weekly_time[i];
-                datetime week_next_open = (i + 1 < weekly_total) ? weekly_time[i + 1] : (week_open + 7 * 86400);
+            if (isLongTermSwingLow) {
+                datetime long_term_open = long_term_time[i];
+                datetime long_term_next_open = (i + 1 < long_term_total) ? long_term_time[i + 1] : (long_term_open + long_term_tf_seconds);
                 int day_idx = -1;
                 double min_low = DBL_MAX;
 
                 for (int d = base_limit; d < rates_total; d++) {
-                    if (time[d] < week_open || time[d] >= week_next_open)
+                    if (time[d] < long_term_open || time[d] >= long_term_next_open)
                         continue;
 
                     if (low[d] < min_low) {
@@ -221,9 +245,9 @@ int OnCalculate(const int rates_total,
                 if (day_idx >= 0) {
                     datetime left_time = time[day_idx];
                     datetime right_time = (day_idx + 1 < rates_total) ? time[day_idx + 1] : (left_time + chart_period_seconds);
-                    string name = MakeSwingObjectName(SwingWeeklyObjectPrefix, false, left_time);
-                    double center = min_low - (double)InpWeeklyLabelOffsetPoints * _Point;
-                    UpsertSwingObject(name, InpWeeklySwingLowColor, left_time, right_time, center);
+                    string name = MakeSwingObjectName(SwingLongTermObjectPrefix, false, left_time);
+                    double center = min_low - (double)InpLongTermLabelOffsetPoints * _Point;
+                    UpsertSwingObject(name, InpLongTermSwingLowColor, left_time, right_time, center);
                 }
             }
         }

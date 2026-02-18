@@ -338,6 +338,10 @@ int OnCalculate(const int rates_total,
     bool has_rebound_high_ref = false;
     double pullback_low_ref = 0.0;
     double rebound_high_ref = 0.0;
+    bool has_latest_chart_swing_high = false;
+    bool has_latest_chart_swing_low = false;
+    double latest_chart_swing_high = 0.0;
+    double latest_chart_swing_low = 0.0;
     bool pending_up_break = false;
     bool pending_down_break = false;
     bool has_higher_high_ready = false;
@@ -374,23 +378,68 @@ int OnCalculate(const int rates_total,
             string name = MakeSwingObjectName(SwingDailyObjectPrefix, true, left_time);
             double center = high[i] + (double)InpLabelOffsetPoints * _Point;
             UpsertSwingObject(name, InpSwingHighColor, left_time, center);
+            latest_chart_swing_high = high[i];
+            has_latest_chart_swing_high = true;
+            // 下目線中は、戻り高値より低いswing高値が確定したら戻り高値を切り下げる
+            if (current_gaze == GAZE_BEARISH) {
+                if (!has_rebound_high_ref || high[i] < rebound_high_ref) {
+                    rebound_high_ref = high[i];
+                    has_rebound_high_ref = true;
+                }
+            }
         }
         if (isSwingLow) {
             string name = MakeSwingObjectName(SwingDailyObjectPrefix, false, left_time);
             double center = low[i] - (double)InpLabelOffsetPoints * _Point;
             UpsertSwingObject(name, InpSwingLowColor, left_time, center);
+            latest_chart_swing_low = low[i];
+            has_latest_chart_swing_low = true;
+            // 上目線中は、押し安値より高いswing安値が確定したら押し安値を切り上げる
+            if (current_gaze == GAZE_BULLISH) {
+                if (!has_pullback_low_ref || low[i] > pullback_low_ref) {
+                    pullback_low_ref = low[i];
+                    has_pullback_low_ref = true;
+                }
+            }
         }
 
         double bar_body_high = MathMax(open[i], close[i]);
         double bar_body_low = MathMin(open[i], close[i]);
-        bool up_break_on_rebound_high = has_rebound_high_ref && (bar_body_high > rebound_high_ref);
-        bool down_break_on_pullback_low = has_pullback_low_ref && (bar_body_low < pullback_low_ref);
+        double rebound_break_ref = has_rebound_high_ref ? rebound_high_ref : confirmed_chart_swing_high;
+        double pullback_break_ref = has_pullback_low_ref ? pullback_low_ref : confirmed_chart_swing_low;
+        bool has_rebound_break_ref = has_rebound_high_ref || has_confirmed_chart_swing_high;
+        bool has_pullback_break_ref = has_pullback_low_ref || has_confirmed_chart_swing_low;
+        bool up_break_on_rebound_high = has_rebound_break_ref && (bar_body_high > rebound_break_ref);
+        bool down_break_on_pullback_low = has_pullback_break_ref && (bar_body_low < pullback_break_ref);
+
+        // 起点更新はブレイク発生時点の「直近swing」を採用する
+        if (up_break_on_rebound_high && has_latest_chart_swing_low) {
+            if (!has_pullback_low_ref || latest_chart_swing_low >= pullback_low_ref) {
+                pullback_low_ref = latest_chart_swing_low;
+                has_pullback_low_ref = true;
+            }
+        }
+        if (down_break_on_pullback_low && has_latest_chart_swing_high) {
+            if (!has_rebound_high_ref || latest_chart_swing_high <= rebound_high_ref) {
+                rebound_high_ref = latest_chart_swing_high;
+                has_rebound_high_ref = true;
+            }
+        }
 
         // 目線は押し安値/戻り高値ブレイクのみで切替
+        GazeState prev_gaze = current_gaze;
         if (up_break_on_rebound_high && !down_break_on_pullback_low) {
             current_gaze = GAZE_BULLISH;
         } else if (down_break_on_pullback_low && !up_break_on_rebound_high) {
             current_gaze = GAZE_BEARISH;
+        }
+        // 目線反転時は、反対側参照点をリセットして古い基準値の残留を防ぐ
+        if (prev_gaze != current_gaze) {
+            if (current_gaze == GAZE_BULLISH) {
+                has_rebound_high_ref = false;
+            } else if (current_gaze == GAZE_BEARISH) {
+                has_pullback_low_ref = false;
+            }
         }
 
         SwingDirection prev_chart_direction = current_chart_direction;
@@ -443,11 +492,6 @@ int OnCalculate(const int rates_total,
                 has_higher_high_ready = had_prev_high && (confirmed_chart_swing_body_high > prev_high_wick);
                 has_lower_high_ready = had_prev_high && (confirmed_chart_swing_body_high < prev_high_wick);
 
-                if (has_confirmed_chart_swing_low) {
-                    pullback_low_ref = confirmed_chart_swing_low;
-                    has_pullback_low_ref = true;
-                }
-
                 if ((current_chart_direction == SWING_DIR_RANDOM || current_chart_direction == SWING_DIR_UNKNOWN) &&
                     pending_down_break && has_lower_high_ready && has_lower_low_ready) {
                     current_chart_direction = SWING_DIR_DOWN;
@@ -467,11 +511,6 @@ int OnCalculate(const int rates_total,
                 last_confirmed_chart_swing_type = 2;
                 has_lower_low_ready = had_prev_low && (confirmed_chart_swing_body_low < prev_low_wick);
                 has_higher_low_ready = had_prev_low && (confirmed_chart_swing_body_low > prev_low_wick);
-
-                if (has_confirmed_chart_swing_high) {
-                    rebound_high_ref = confirmed_chart_swing_high;
-                    has_rebound_high_ref = true;
-                }
 
                 if ((current_chart_direction == SWING_DIR_RANDOM || current_chart_direction == SWING_DIR_UNKNOWN) &&
                     pending_up_break && has_higher_high_ready && has_higher_low_ready) {

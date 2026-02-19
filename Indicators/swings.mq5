@@ -24,6 +24,8 @@ const int InpSwingMarkerFontSize = 8;
 const string SwingDailyObjectPrefix = "SWING_BOX_D1_";
 const string SwingLongTermObjectPrefix = "SWING_BOX_LONGTERM_";
 const string DirectionBackgroundPrefix = "SWING_BG_D1_";
+const string PullbackLinePrefix = "SWING_PULLBACK_LINE_";
+const string ReboundLinePrefix = "SWING_REBOUND_LINE_";
 const string DirectionChartLabelName = "SWING_DIRECTION_CHART_TF";
 const string DirectionLongTermLabelName = "SWING_DIRECTION_LONGTERM_TF";
 const int DirectionLabelX = 12;
@@ -31,6 +33,8 @@ const int DirectionChartLabelY = 20;
 const int DirectionLongTermLabelY = 42;
 const color BgColorUp = clrHoneydew;
 const color BgColorDown = clrMistyRose;
+const color PullbackLineColor = clrLimeGreen;
+const color ReboundLineColor = clrRed;
 
 enum SwingDirection {
     SWING_DIR_UNKNOWN = 0,
@@ -64,7 +68,9 @@ void OnDeinit(const int reason) {
         string name = ObjectName(0, i, 0, -1);
         if (StringFind(name, SwingDailyObjectPrefix) == 0 ||
             StringFind(name, SwingLongTermObjectPrefix) == 0 ||
-            StringFind(name, DirectionBackgroundPrefix) == 0)
+            StringFind(name, DirectionBackgroundPrefix) == 0 ||
+            StringFind(name, PullbackLinePrefix) == 0 ||
+            StringFind(name, ReboundLinePrefix) == 0)
             ObjectDelete(0, name);
     }
     ObjectDelete(0, DirectionChartLabelName);
@@ -101,6 +107,63 @@ void UpsertSwingObject(const string name, const color box_color, const datetime 
     ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
     ObjectSetInteger(0, name, OBJPROP_SELECTED, false);
     ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+}
+
+string MakeAnchorLineName(const string prefix, const datetime start_time, const double price) {
+    long price_key = (long)MathRound(price / _Point);
+    return prefix + IntegerToString((long)start_time) + "_" + IntegerToString(price_key);
+}
+
+void UpsertAnchorLine(const string name,
+                      const color line_color,
+                      const datetime start_time,
+                      const datetime end_time,
+                      const double price) {
+    datetime right_time = (end_time > start_time) ? end_time : (start_time + 1);
+    if (ObjectFind(0, name) < 0) {
+        if (!ObjectCreate(0, name, OBJ_TREND, 0, start_time, price, right_time, price))
+            return;
+    } else {
+        ObjectMove(0, name, 0, start_time, price);
+        ObjectMove(0, name, 1, right_time, price);
+    }
+
+    ObjectSetInteger(0, name, OBJPROP_COLOR, line_color);
+    ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_SOLID);
+    ObjectSetInteger(0, name, OBJPROP_WIDTH, 2);
+    ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, false);
+    ObjectSetInteger(0, name, OBJPROP_BACK, false);
+    ObjectSetInteger(0, name, OBJPROP_ZORDER, 80);
+    ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+    ObjectSetInteger(0, name, OBJPROP_SELECTED, false);
+    ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+}
+
+void CloseActiveAnchorLine(bool &has_active_line,
+                           string &active_line_name,
+                           const datetime active_start_time,
+                           const double active_price,
+                           const color line_color,
+                           const datetime close_time) {
+    if (!has_active_line)
+        return;
+    UpsertAnchorLine(active_line_name, line_color, active_start_time, close_time, active_price);
+    has_active_line = false;
+}
+
+void StartAnchorLine(const string prefix,
+                     const color line_color,
+                     const datetime start_time,
+                     const double price,
+                     bool &has_active_line,
+                     string &active_line_name,
+                     datetime &active_start_time,
+                     double &active_price) {
+    active_line_name = MakeAnchorLineName(prefix, start_time, price);
+    active_start_time = start_time;
+    active_price = price;
+    has_active_line = true;
+    UpsertAnchorLine(active_line_name, line_color, start_time, start_time + 1, price);
 }
 
 SwingDirection DetectSwingDirection(const bool has_high_latest,
@@ -342,6 +405,16 @@ int OnCalculate(const int rates_total,
     bool has_latest_chart_swing_low = false;
     double latest_chart_swing_high = 0.0;
     double latest_chart_swing_low = 0.0;
+    datetime latest_chart_swing_high_time = 0;
+    datetime latest_chart_swing_low_time = 0;
+    bool has_active_pullback_line = false;
+    bool has_active_rebound_line = false;
+    string active_pullback_line_name = "";
+    string active_rebound_line_name = "";
+    datetime active_pullback_start_time = 0;
+    datetime active_rebound_start_time = 0;
+    double active_pullback_price = 0.0;
+    double active_rebound_price = 0.0;
     bool pending_up_break = false;
     bool pending_down_break = false;
     bool has_higher_high_ready = false;
@@ -379,12 +452,22 @@ int OnCalculate(const int rates_total,
             double center = high[i] + (double)InpLabelOffsetPoints * _Point;
             UpsertSwingObject(name, InpSwingHighColor, left_time, center);
             latest_chart_swing_high = high[i];
+            latest_chart_swing_high_time = left_time;
             has_latest_chart_swing_high = true;
             // 下目線中は、戻り高値より低いswing高値が確定したら戻り高値を切り下げる
             if (current_gaze == GAZE_BEARISH) {
                 if (!has_rebound_high_ref || high[i] < rebound_high_ref) {
+                    CloseActiveAnchorLine(
+                        has_active_rebound_line, active_rebound_line_name,
+                        active_rebound_start_time, active_rebound_price,
+                        ReboundLineColor, left_time
+                    );
                     rebound_high_ref = high[i];
                     has_rebound_high_ref = true;
+                    StartAnchorLine(
+                        ReboundLinePrefix, ReboundLineColor, left_time, rebound_high_ref,
+                        has_active_rebound_line, active_rebound_line_name, active_rebound_start_time, active_rebound_price
+                    );
                 }
             }
         }
@@ -393,12 +476,22 @@ int OnCalculate(const int rates_total,
             double center = low[i] - (double)InpLabelOffsetPoints * _Point;
             UpsertSwingObject(name, InpSwingLowColor, left_time, center);
             latest_chart_swing_low = low[i];
+            latest_chart_swing_low_time = left_time;
             has_latest_chart_swing_low = true;
             // 上目線中は、押し安値より高いswing安値が確定したら押し安値を切り上げる
             if (current_gaze == GAZE_BULLISH) {
                 if (!has_pullback_low_ref || low[i] > pullback_low_ref) {
+                    CloseActiveAnchorLine(
+                        has_active_pullback_line, active_pullback_line_name,
+                        active_pullback_start_time, active_pullback_price,
+                        PullbackLineColor, left_time
+                    );
                     pullback_low_ref = low[i];
                     has_pullback_low_ref = true;
+                    StartAnchorLine(
+                        PullbackLinePrefix, PullbackLineColor, left_time, pullback_low_ref,
+                        has_active_pullback_line, active_pullback_line_name, active_pullback_start_time, active_pullback_price
+                    );
                 }
             }
         }
@@ -415,14 +508,42 @@ int OnCalculate(const int rates_total,
         // 起点更新はブレイク発生時点の「直近swing」を採用する
         if (up_break_on_rebound_high && has_latest_chart_swing_low) {
             if (!has_pullback_low_ref || latest_chart_swing_low >= pullback_low_ref) {
+                bool is_pullback_changed = (!has_pullback_low_ref || latest_chart_swing_low > pullback_low_ref);
+                if (is_pullback_changed) {
+                    CloseActiveAnchorLine(
+                        has_active_pullback_line, active_pullback_line_name,
+                        active_pullback_start_time, active_pullback_price,
+                        PullbackLineColor, left_time
+                    );
+                }
                 pullback_low_ref = latest_chart_swing_low;
                 has_pullback_low_ref = true;
+                if (is_pullback_changed) {
+                    StartAnchorLine(
+                        PullbackLinePrefix, PullbackLineColor, latest_chart_swing_low_time, pullback_low_ref,
+                        has_active_pullback_line, active_pullback_line_name, active_pullback_start_time, active_pullback_price
+                    );
+                }
             }
         }
         if (down_break_on_pullback_low && has_latest_chart_swing_high) {
             if (!has_rebound_high_ref || latest_chart_swing_high <= rebound_high_ref) {
+                bool is_rebound_changed = (!has_rebound_high_ref || latest_chart_swing_high < rebound_high_ref);
+                if (is_rebound_changed) {
+                    CloseActiveAnchorLine(
+                        has_active_rebound_line, active_rebound_line_name,
+                        active_rebound_start_time, active_rebound_price,
+                        ReboundLineColor, left_time
+                    );
+                }
                 rebound_high_ref = latest_chart_swing_high;
                 has_rebound_high_ref = true;
+                if (is_rebound_changed) {
+                    StartAnchorLine(
+                        ReboundLinePrefix, ReboundLineColor, latest_chart_swing_high_time, rebound_high_ref,
+                        has_active_rebound_line, active_rebound_line_name, active_rebound_start_time, active_rebound_price
+                    );
+                }
             }
         }
 
@@ -436,10 +557,34 @@ int OnCalculate(const int rates_total,
         // 目線反転時は、反対側参照点をリセットして古い基準値の残留を防ぐ
         if (prev_gaze != current_gaze) {
             if (current_gaze == GAZE_BULLISH) {
+                CloseActiveAnchorLine(
+                    has_active_rebound_line, active_rebound_line_name,
+                    active_rebound_start_time, active_rebound_price,
+                    ReboundLineColor, left_time
+                );
                 has_rebound_high_ref = false;
             } else if (current_gaze == GAZE_BEARISH) {
+                CloseActiveAnchorLine(
+                    has_active_pullback_line, active_pullback_line_name,
+                    active_pullback_start_time, active_pullback_price,
+                    PullbackLineColor, left_time
+                );
                 has_pullback_low_ref = false;
             }
+        }
+
+        // アクティブラインは更新/反転イベントまで現在バーへ延長表示する
+        if (has_active_pullback_line) {
+            UpsertAnchorLine(
+                active_pullback_line_name, PullbackLineColor,
+                active_pullback_start_time, left_time, active_pullback_price
+            );
+        }
+        if (has_active_rebound_line) {
+            UpsertAnchorLine(
+                active_rebound_line_name, ReboundLineColor,
+                active_rebound_start_time, left_time, active_rebound_price
+            );
         }
 
         SwingDirection prev_chart_direction = current_chart_direction;

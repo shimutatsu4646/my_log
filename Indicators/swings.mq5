@@ -415,6 +415,10 @@ int OnCalculate(const int rates_total,
     datetime active_rebound_start_time = 0;
     double active_pullback_price = 0.0;
     double active_rebound_price = 0.0;
+    bool has_gaze_high_extreme = false;
+    bool has_gaze_low_extreme = false;
+    double gaze_high_extreme = 0.0;
+    double gaze_low_extreme = 0.0;
     bool pending_up_break = false;
     bool pending_down_break = false;
     bool has_higher_high_ready = false;
@@ -426,11 +430,17 @@ int OnCalculate(const int rates_total,
 
     SwingDirection chart_direction_series[];
     GazeState gaze_series[];
+    double bg_top_series[];
+    double bg_bottom_series[];
     ArrayResize(chart_direction_series, rates_total);
     ArrayResize(gaze_series, rates_total);
+    ArrayResize(bg_top_series, rates_total);
+    ArrayResize(bg_bottom_series, rates_total);
     for (int i = 0; i < rates_total; i++) {
         chart_direction_series[i] = SWING_DIR_UNKNOWN;
         gaze_series[i] = GAZE_UNKNOWN;
+        bg_top_series[i] = 0.0;
+        bg_bottom_series[i] = 0.0;
     }
 
     for (int i = start; i < end_index; i++) {
@@ -563,6 +573,7 @@ int OnCalculate(const int rates_total,
                     ReboundLineColor, left_time
                 );
                 has_rebound_high_ref = false;
+                has_gaze_high_extreme = false;
             } else if (current_gaze == GAZE_BEARISH) {
                 CloseActiveAnchorLine(
                     has_active_pullback_line, active_pullback_line_name,
@@ -570,6 +581,23 @@ int OnCalculate(const int rates_total,
                     PullbackLineColor, left_time
                 );
                 has_pullback_low_ref = false;
+                has_gaze_low_extreme = false;
+            }
+        }
+
+        if (current_gaze == GAZE_BULLISH) {
+            if (!has_gaze_high_extreme) {
+                gaze_high_extreme = high[i];
+                has_gaze_high_extreme = true;
+            } else if (high[i] > gaze_high_extreme) {
+                gaze_high_extreme = high[i];
+            }
+        } else if (current_gaze == GAZE_BEARISH) {
+            if (!has_gaze_low_extreme) {
+                gaze_low_extreme = low[i];
+                has_gaze_low_extreme = true;
+            } else if (low[i] < gaze_low_extreme) {
+                gaze_low_extreme = low[i];
             }
         }
 
@@ -668,6 +696,16 @@ int OnCalculate(const int rates_total,
 
         chart_direction_series[i] = current_chart_direction;
         gaze_series[i] = current_gaze;
+        if (current_gaze == GAZE_BULLISH && has_pullback_low_ref && has_gaze_high_extreme) {
+            bg_top_series[i] = gaze_high_extreme;
+            bg_bottom_series[i] = pullback_low_ref;
+        } else if (current_gaze == GAZE_BEARISH && has_rebound_high_ref && has_gaze_low_extreme) {
+            bg_top_series[i] = rebound_high_ref;
+            bg_bottom_series[i] = gaze_low_extreme;
+        } else {
+            bg_top_series[i] = 0.0;
+            bg_bottom_series[i] = 0.0;
+        }
     }
 
     DeleteObjectsByPrefix(DirectionBackgroundPrefix);
@@ -676,24 +714,35 @@ int OnCalculate(const int rates_total,
     if (bg_end >= bg_start) {
         int segment_start = bg_start;
         GazeState segment_gaze = gaze_series[bg_start];
+        double segment_top = bg_top_series[bg_start];
+        double segment_bottom = bg_bottom_series[bg_start];
 
         for (int i = bg_start + 1; i <= bg_end; i++) {
             bool gaze_changed = (gaze_series[i] != segment_gaze);
-            if (gaze_changed) {
+            bool bounds_changed =
+                (segment_gaze == GAZE_BULLISH || segment_gaze == GAZE_BEARISH) &&
+                (bg_top_series[i] != segment_top || bg_bottom_series[i] != segment_bottom);
+            if (gaze_changed || bounds_changed) {
+                bool use_fixed_bounds = (segment_gaze == GAZE_BULLISH || segment_gaze == GAZE_BEARISH) &&
+                                        (segment_top > segment_bottom);
                 DrawDirectionBackgroundSegment(
                     segment_start, i - 1, segment_gaze,
                     rates_total, chart_period_seconds, time, high, low,
-                    false, 0.0, 0.0
+                    use_fixed_bounds, segment_top, segment_bottom
                 );
                 segment_start = i;
                 segment_gaze = gaze_series[i];
+                segment_top = bg_top_series[i];
+                segment_bottom = bg_bottom_series[i];
             }
         }
 
+        bool use_fixed_bounds = (segment_gaze == GAZE_BULLISH || segment_gaze == GAZE_BEARISH) &&
+                                (segment_top > segment_bottom);
         DrawDirectionBackgroundSegment(
             segment_start, bg_end, segment_gaze,
             rates_total, chart_period_seconds, time, high, low,
-            false, 0.0, 0.0
+            use_fixed_bounds, segment_top, segment_bottom
         );
     }
 

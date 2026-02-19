@@ -26,6 +26,8 @@ const string SwingLongTermObjectPrefix = "SWING_BOX_LONGTERM_";
 const string DirectionBackgroundPrefix = "SWING_BG_D1_";
 const string PullbackLinePrefix = "SWING_PULLBACK_LINE_";
 const string ReboundLinePrefix = "SWING_REBOUND_LINE_";
+const string LongTermPullbackLinePrefix = "SWING_LONGTERM_PULLBACK_LINE_";
+const string LongTermReboundLinePrefix = "SWING_LONGTERM_REBOUND_LINE_";
 const string DirectionChartLabelName = "SWING_DIRECTION_CHART_TF";
 const string DirectionLongTermLabelName = "SWING_DIRECTION_LONGTERM_TF";
 const int DirectionLabelX = 12;
@@ -35,6 +37,9 @@ const color BgColorUp = clrHoneydew;
 const color BgColorDown = clrMistyRose;
 const color PullbackLineColor = clrLimeGreen;
 const color ReboundLineColor = clrRed;
+const color LongTermPullbackLineColor = clrSteelBlue;
+const color LongTermReboundLineColor = clrDarkOrange;
+const int AnchorLineWidth = 2;
 
 enum SwingDirection {
     SWING_DIR_UNKNOWN = 0,
@@ -70,7 +75,9 @@ void OnDeinit(const int reason) {
             StringFind(name, SwingLongTermObjectPrefix) == 0 ||
             StringFind(name, DirectionBackgroundPrefix) == 0 ||
             StringFind(name, PullbackLinePrefix) == 0 ||
-            StringFind(name, ReboundLinePrefix) == 0)
+            StringFind(name, ReboundLinePrefix) == 0 ||
+            StringFind(name, LongTermPullbackLinePrefix) == 0 ||
+            StringFind(name, LongTermReboundLinePrefix) == 0)
             ObjectDelete(0, name);
     }
     ObjectDelete(0, DirectionChartLabelName);
@@ -118,7 +125,8 @@ void UpsertAnchorLine(const string name,
                       const color line_color,
                       const datetime start_time,
                       const datetime end_time,
-                      const double price) {
+                      const double price,
+                      const int line_width) {
     datetime right_time = (end_time > start_time) ? end_time : (start_time + 1);
     if (ObjectFind(0, name) < 0) {
         if (!ObjectCreate(0, name, OBJ_TREND, 0, start_time, price, right_time, price))
@@ -130,7 +138,7 @@ void UpsertAnchorLine(const string name,
 
     ObjectSetInteger(0, name, OBJPROP_COLOR, line_color);
     ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_SOLID);
-    ObjectSetInteger(0, name, OBJPROP_WIDTH, 2);
+    ObjectSetInteger(0, name, OBJPROP_WIDTH, line_width);
     ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, false);
     ObjectSetInteger(0, name, OBJPROP_BACK, false);
     ObjectSetInteger(0, name, OBJPROP_ZORDER, 80);
@@ -139,16 +147,52 @@ void UpsertAnchorLine(const string name,
     ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
 }
 
+void UpsertAnchorLine(const string name,
+                      const color line_color,
+                      const datetime start_time,
+                      const datetime end_time,
+                      const double price) {
+    UpsertAnchorLine(name, line_color, start_time, end_time, price, AnchorLineWidth);
+}
+
+void CloseActiveAnchorLine(bool &has_active_line,
+                           string &active_line_name,
+                           const datetime active_start_time,
+                           const double active_price,
+                           const color line_color,
+                           const datetime close_time,
+                           const int line_width) {
+    if (!has_active_line)
+        return;
+    UpsertAnchorLine(active_line_name, line_color, active_start_time, close_time, active_price, line_width);
+    has_active_line = false;
+}
+
 void CloseActiveAnchorLine(bool &has_active_line,
                            string &active_line_name,
                            const datetime active_start_time,
                            const double active_price,
                            const color line_color,
                            const datetime close_time) {
-    if (!has_active_line)
-        return;
-    UpsertAnchorLine(active_line_name, line_color, active_start_time, close_time, active_price);
-    has_active_line = false;
+    CloseActiveAnchorLine(
+        has_active_line, active_line_name, active_start_time, active_price, line_color, close_time, AnchorLineWidth
+    );
+}
+
+void StartAnchorLine(const string prefix,
+                     const color line_color,
+                     const datetime start_time,
+                     const double price,
+                     bool &has_active_line,
+                     string &active_line_name,
+                     datetime &active_start_time,
+                     double &active_price,
+                     const int line_width) {
+    active_line_name = MakeAnchorLineName(prefix, start_time, price);
+    active_start_time = start_time;
+    active_price = price;
+    has_active_line = true;
+    UpsertAnchorLine(active_line_name, line_color, start_time, start_time + 1, price, line_width);
 }
 
 void StartAnchorLine(const string prefix,
@@ -159,11 +203,21 @@ void StartAnchorLine(const string prefix,
                      string &active_line_name,
                      datetime &active_start_time,
                      double &active_price) {
-    active_line_name = MakeAnchorLineName(prefix, start_time, price);
-    active_start_time = start_time;
-    active_price = price;
-    has_active_line = true;
-    UpsertAnchorLine(active_line_name, line_color, start_time, start_time + 1, price);
+    StartAnchorLine(
+        prefix, line_color, start_time, price,
+        has_active_line, active_line_name, active_start_time, active_price,
+        AnchorLineWidth
+    );
+}
+
+double GetSeparatedLongTermLinePrice(const double base_price,
+                                     const bool has_chart_ref,
+                                     const double chart_ref_price,
+                                     const bool place_below_chart_line,
+                                     const int line_width) {
+    // 常にライン幅の50倍だけ上下へずらして表示し、チャート足ラインとの重なりを防ぐ
+    double shift = (double)(line_width * 50) * _Point;
+    return place_below_chart_line ? (base_price - shift) : (base_price + shift);
 }
 
 SwingDirection DetectSwingDirection(const bool has_high_latest,
@@ -787,6 +841,32 @@ int OnCalculate(const int rates_total,
     double prev_long_term_high_wick = 0.0;
     double prev_long_term_low_wick = 0.0;
     int last_long_term_swing_type = 0;
+    bool has_long_term_confirmed_swing_high = false;
+    bool has_long_term_confirmed_swing_low = false;
+    double long_term_confirmed_swing_high = 0.0;
+    double long_term_confirmed_swing_low = 0.0;
+
+    bool has_long_term_pullback_low_ref = false;
+    bool has_long_term_rebound_high_ref = false;
+    double long_term_pullback_low_ref = 0.0;
+    double long_term_rebound_high_ref = 0.0;
+
+    bool has_latest_long_term_swing_high = false;
+    bool has_latest_long_term_swing_low = false;
+    double latest_long_term_swing_high = 0.0;
+    double latest_long_term_swing_low = 0.0;
+    datetime latest_long_term_swing_high_time = 0;
+    datetime latest_long_term_swing_low_time = 0;
+
+    bool has_active_long_term_pullback_line = false;
+    bool has_active_long_term_rebound_line = false;
+    string active_long_term_pullback_line_name = "";
+    string active_long_term_rebound_line_name = "";
+    datetime active_long_term_pullback_start_time = 0;
+    datetime active_long_term_rebound_start_time = 0;
+    double active_long_term_pullback_price = 0.0;
+    double active_long_term_rebound_price = 0.0;
+    GazeState current_long_term_gaze = GAZE_UNKNOWN;
 
     if (long_term_total >= swing_span * 2 + 1) {
         for (int i = swing_span; i < long_term_total - swing_span; i++) {
@@ -801,7 +881,35 @@ int OnCalculate(const int rates_total,
                     break;
             }
 
+            datetime long_term_left_time = long_term_time[i];
             if (isLongTermSwingHigh) {
+                latest_long_term_swing_high = long_term_high[i];
+                latest_long_term_swing_high_time = long_term_left_time;
+                has_latest_long_term_swing_high = true;
+
+                if (current_long_term_gaze == GAZE_BEARISH) {
+                    if (!has_long_term_rebound_high_ref || long_term_high[i] < long_term_rebound_high_ref) {
+                        CloseActiveAnchorLine(
+                            has_active_long_term_rebound_line, active_long_term_rebound_line_name,
+                            active_long_term_rebound_start_time, active_long_term_rebound_price,
+                            LongTermReboundLineColor, long_term_left_time, AnchorLineWidth
+                        );
+                        long_term_rebound_high_ref = long_term_high[i];
+                        has_long_term_rebound_high_ref = true;
+                        double line_price = GetSeparatedLongTermLinePrice(
+                            long_term_rebound_high_ref,
+                            has_rebound_high_ref, rebound_high_ref,
+                            false, AnchorLineWidth
+                        );
+                        StartAnchorLine(
+                            LongTermReboundLinePrefix, LongTermReboundLineColor, long_term_left_time, line_price,
+                            has_active_long_term_rebound_line, active_long_term_rebound_line_name,
+                            active_long_term_rebound_start_time, active_long_term_rebound_price,
+                            AnchorLineWidth
+                        );
+                    }
+                }
+
                 if (last_long_term_swing_type != 1) {
                     double body_high = has_long_term_body_data ? MathMax(long_term_open[i], long_term_close[i]) : long_term_high[i];
                     long_term_high_latest = body_high;
@@ -813,6 +921,8 @@ int OnCalculate(const int rates_total,
                     prev_long_term_high_wick = long_term_high[i];
                     has_prev_long_term_high_wick = true;
                     last_long_term_swing_type = 1;
+                    long_term_confirmed_swing_high = long_term_high[i];
+                    has_long_term_confirmed_swing_high = true;
                 }
 
                 datetime long_term_bar_open_time = long_term_time[i];
@@ -836,6 +946,33 @@ int OnCalculate(const int rates_total,
             }
 
             if (isLongTermSwingLow) {
+                latest_long_term_swing_low = long_term_low[i];
+                latest_long_term_swing_low_time = long_term_left_time;
+                has_latest_long_term_swing_low = true;
+
+                if (current_long_term_gaze == GAZE_BULLISH) {
+                    if (!has_long_term_pullback_low_ref || long_term_low[i] > long_term_pullback_low_ref) {
+                        CloseActiveAnchorLine(
+                            has_active_long_term_pullback_line, active_long_term_pullback_line_name,
+                            active_long_term_pullback_start_time, active_long_term_pullback_price,
+                            LongTermPullbackLineColor, long_term_left_time, AnchorLineWidth
+                        );
+                        long_term_pullback_low_ref = long_term_low[i];
+                        has_long_term_pullback_low_ref = true;
+                        double line_price = GetSeparatedLongTermLinePrice(
+                            long_term_pullback_low_ref,
+                            has_pullback_low_ref, pullback_low_ref,
+                            true, AnchorLineWidth
+                        );
+                        StartAnchorLine(
+                            LongTermPullbackLinePrefix, LongTermPullbackLineColor, long_term_left_time, line_price,
+                            has_active_long_term_pullback_line, active_long_term_pullback_line_name,
+                            active_long_term_pullback_start_time, active_long_term_pullback_price,
+                            AnchorLineWidth
+                        );
+                    }
+                }
+
                 if (last_long_term_swing_type != 2) {
                     double body_low = has_long_term_body_data ? MathMin(long_term_open[i], long_term_close[i]) : long_term_low[i];
                     long_term_low_latest = body_low;
@@ -847,6 +984,8 @@ int OnCalculate(const int rates_total,
                     prev_long_term_low_wick = long_term_low[i];
                     has_prev_long_term_low_wick = true;
                     last_long_term_swing_type = 2;
+                    long_term_confirmed_swing_low = long_term_low[i];
+                    has_long_term_confirmed_swing_low = true;
                 }
 
                 datetime long_term_bar_open_time = long_term_time[i];
@@ -867,6 +1006,116 @@ int OnCalculate(const int rates_total,
                     double center = min_low - (double)InpLongTermLabelOffsetPoints * _Point;
                     UpsertSwingObject(name, InpLongTermSwingLowColor, marker_time, center);
                 }
+            }
+
+            double long_term_bar_body_high = has_long_term_body_data ? MathMax(long_term_open[i], long_term_close[i]) : long_term_high[i];
+            double long_term_bar_body_low = has_long_term_body_data ? MathMin(long_term_open[i], long_term_close[i]) : long_term_low[i];
+            double long_term_rebound_break_ref =
+                has_long_term_rebound_high_ref ? long_term_rebound_high_ref : long_term_confirmed_swing_high;
+            double long_term_pullback_break_ref =
+                has_long_term_pullback_low_ref ? long_term_pullback_low_ref : long_term_confirmed_swing_low;
+            bool has_long_term_rebound_break_ref = has_long_term_rebound_high_ref || has_long_term_confirmed_swing_high;
+            bool has_long_term_pullback_break_ref = has_long_term_pullback_low_ref || has_long_term_confirmed_swing_low;
+            bool up_break_on_long_term_rebound =
+                has_long_term_rebound_break_ref && (long_term_bar_body_high > long_term_rebound_break_ref);
+            bool down_break_on_long_term_pullback =
+                has_long_term_pullback_break_ref && (long_term_bar_body_low < long_term_pullback_break_ref);
+
+            if (up_break_on_long_term_rebound && has_latest_long_term_swing_low) {
+                if (!has_long_term_pullback_low_ref || latest_long_term_swing_low >= long_term_pullback_low_ref) {
+                    bool is_pullback_changed = (!has_long_term_pullback_low_ref || latest_long_term_swing_low > long_term_pullback_low_ref);
+                    if (is_pullback_changed) {
+                        CloseActiveAnchorLine(
+                            has_active_long_term_pullback_line, active_long_term_pullback_line_name,
+                            active_long_term_pullback_start_time, active_long_term_pullback_price,
+                            LongTermPullbackLineColor, long_term_left_time, AnchorLineWidth
+                        );
+                    }
+                    long_term_pullback_low_ref = latest_long_term_swing_low;
+                    has_long_term_pullback_low_ref = true;
+                    if (is_pullback_changed) {
+                        double line_price = GetSeparatedLongTermLinePrice(
+                            long_term_pullback_low_ref,
+                            has_pullback_low_ref, pullback_low_ref,
+                            true, AnchorLineWidth
+                        );
+                        StartAnchorLine(
+                            LongTermPullbackLinePrefix, LongTermPullbackLineColor,
+                            latest_long_term_swing_low_time, line_price,
+                            has_active_long_term_pullback_line, active_long_term_pullback_line_name,
+                            active_long_term_pullback_start_time, active_long_term_pullback_price,
+                            AnchorLineWidth
+                        );
+                    }
+                }
+            }
+            if (down_break_on_long_term_pullback && has_latest_long_term_swing_high) {
+                if (!has_long_term_rebound_high_ref || latest_long_term_swing_high <= long_term_rebound_high_ref) {
+                    bool is_rebound_changed = (!has_long_term_rebound_high_ref || latest_long_term_swing_high < long_term_rebound_high_ref);
+                    if (is_rebound_changed) {
+                        CloseActiveAnchorLine(
+                            has_active_long_term_rebound_line, active_long_term_rebound_line_name,
+                            active_long_term_rebound_start_time, active_long_term_rebound_price,
+                            LongTermReboundLineColor, long_term_left_time, AnchorLineWidth
+                        );
+                    }
+                    long_term_rebound_high_ref = latest_long_term_swing_high;
+                    has_long_term_rebound_high_ref = true;
+                    if (is_rebound_changed) {
+                        double line_price = GetSeparatedLongTermLinePrice(
+                            long_term_rebound_high_ref,
+                            has_rebound_high_ref, rebound_high_ref,
+                            false, AnchorLineWidth
+                        );
+                        StartAnchorLine(
+                            LongTermReboundLinePrefix, LongTermReboundLineColor,
+                            latest_long_term_swing_high_time, line_price,
+                            has_active_long_term_rebound_line, active_long_term_rebound_line_name,
+                            active_long_term_rebound_start_time, active_long_term_rebound_price,
+                            AnchorLineWidth
+                        );
+                    }
+                }
+            }
+
+            GazeState prev_long_term_gaze = current_long_term_gaze;
+            if (up_break_on_long_term_rebound && !down_break_on_long_term_pullback) {
+                current_long_term_gaze = GAZE_BULLISH;
+            } else if (down_break_on_long_term_pullback && !up_break_on_long_term_rebound) {
+                current_long_term_gaze = GAZE_BEARISH;
+            }
+
+            if (prev_long_term_gaze != current_long_term_gaze) {
+                if (current_long_term_gaze == GAZE_BULLISH) {
+                    CloseActiveAnchorLine(
+                        has_active_long_term_rebound_line, active_long_term_rebound_line_name,
+                        active_long_term_rebound_start_time, active_long_term_rebound_price,
+                        LongTermReboundLineColor, long_term_left_time, AnchorLineWidth
+                    );
+                    has_long_term_rebound_high_ref = false;
+                } else if (current_long_term_gaze == GAZE_BEARISH) {
+                    CloseActiveAnchorLine(
+                        has_active_long_term_pullback_line, active_long_term_pullback_line_name,
+                        active_long_term_pullback_start_time, active_long_term_pullback_price,
+                        LongTermPullbackLineColor, long_term_left_time, AnchorLineWidth
+                    );
+                    has_long_term_pullback_low_ref = false;
+                }
+            }
+
+            if (has_active_long_term_pullback_line) {
+                UpsertAnchorLine(
+                    active_long_term_pullback_line_name, LongTermPullbackLineColor,
+                    active_long_term_pullback_start_time, long_term_left_time, active_long_term_pullback_price,
+                    AnchorLineWidth
+                );
+            }
+            if (has_active_long_term_rebound_line) {
+                UpsertAnchorLine(
+                    active_long_term_rebound_line_name, LongTermReboundLineColor,
+                    active_long_term_rebound_start_time, long_term_left_time, active_long_term_rebound_price,
+                    AnchorLineWidth
+                );
             }
         }
     }

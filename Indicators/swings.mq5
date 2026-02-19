@@ -39,7 +39,7 @@ const color PullbackLineColor = clrLimeGreen;
 const color ReboundLineColor = clrRed;
 const color LongTermPullbackLineColor = clrSteelBlue;
 const color LongTermReboundLineColor = clrDarkOrange;
-const int AnchorLineWidth = 2;
+const int AnchorLineWidth = 3;
 
 enum SwingDirection {
     SWING_DIR_UNKNOWN = 0,

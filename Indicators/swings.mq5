@@ -21,18 +21,13 @@ const color InpLongTermSwingLowColor = clrRed;
 const int InpLabelOffsetPoints = 100;
 const int InpLongTermLabelOffsetPoints = 300;
 const int InpSwingMarkerFontSize = 8;
-const string SwingDailyObjectPrefix = "SWING_BOX_D1_";
+const string SwingChartObjectPrefix = "SWING_BOX_CHART_";
 const string SwingLongTermObjectPrefix = "SWING_BOX_LONGTERM_";
-const string DirectionBackgroundPrefix = "SWING_BG_D1_";
+const string DirectionBackgroundPrefix = "SWING_BG_CHART_";
 const string PullbackLinePrefix = "SWING_PULLBACK_LINE_";
 const string ReboundLinePrefix = "SWING_REBOUND_LINE_";
 const string LongTermPullbackLinePrefix = "SWING_LONGTERM_PULLBACK_LINE_";
 const string LongTermReboundLinePrefix = "SWING_LONGTERM_REBOUND_LINE_";
-const string DirectionChartLabelName = "SWING_DIRECTION_CHART_TF";
-const string DirectionLongTermLabelName = "SWING_DIRECTION_LONGTERM_TF";
-const int DirectionLabelX = 12;
-const int DirectionChartLabelY = 20;
-const int DirectionLongTermLabelY = 42;
 const color BgColorUp = clrHoneydew;
 const color BgColorDown = clrMistyRose;
 const color PullbackLineColor = clrLimeGreen;
@@ -71,7 +66,7 @@ int OnInit() {
 void OnDeinit(const int reason) {
     for (int i = ObjectsTotal(0, 0, -1) - 1; i >= 0; i--) {
         string name = ObjectName(0, i, 0, -1);
-        if (StringFind(name, SwingDailyObjectPrefix) == 0 ||
+        if (StringFind(name, SwingChartObjectPrefix) == 0 ||
             StringFind(name, SwingLongTermObjectPrefix) == 0 ||
             StringFind(name, DirectionBackgroundPrefix) == 0 ||
             StringFind(name, PullbackLinePrefix) == 0 ||
@@ -80,8 +75,6 @@ void OnDeinit(const int reason) {
             StringFind(name, LongTermReboundLinePrefix) == 0)
             ObjectDelete(0, name);
     }
-    ObjectDelete(0, DirectionChartLabelName);
-    ObjectDelete(0, DirectionLongTermLabelName);
 }
 
 string MakeSwingObjectName(const string prefix, const bool isHigh, const datetime t) {
@@ -281,49 +274,6 @@ SwingDirection UpdateDirectionByBreakout(const SwingDirection current_direction,
     return current_direction;
 }
 
-void UpsertDirectionLabel(const string name, const int y_distance, const string text, const color text_color) {
-    if (ObjectFind(0, name) < 0) {
-        if (!ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0))
-            return;
-    }
-
-    ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
-    ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_RIGHT_UPPER);
-    ObjectSetInteger(0, name, OBJPROP_XDISTANCE, DirectionLabelX);
-    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y_distance);
-    ObjectSetString(0, name, OBJPROP_TEXT, text);
-    ObjectSetString(0, name, OBJPROP_FONT, "Arial");
-    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, 10);
-    ObjectSetInteger(0, name, OBJPROP_COLOR, text_color);
-    ObjectSetInteger(0, name, OBJPROP_BACK, false);
-    ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-    ObjectSetInteger(0, name, OBJPROP_SELECTED, false);
-    ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-}
-
-void UpsertDirectionStatusLabel(const string name,
-                                const int y_distance,
-                                const string title,
-                                const SwingDirection direction,
-                                const color up_color,
-                                const color down_color) {
-    string status = "RANDOM";
-    color status_color = down_color;
-
-    if (direction == SWING_DIR_UP) {
-        status = "UP";
-        status_color = up_color;
-    } else if (direction == SWING_DIR_DOWN) {
-        status = "DOWN";
-        status_color = down_color;
-    } else if (direction == SWING_DIR_UNKNOWN) {
-        status = "UNKNOWN";
-        status_color = up_color;
-    }
-
-    UpsertDirectionLabel(name, y_distance, title + ": " + status, status_color);
-}
-
 void DeleteObjectsByPrefix(const string prefix) {
     for (int i = ObjectsTotal(0, 0, -1) - 1; i >= 0; i--) {
         string name = ObjectName(0, i, 0, -1);
@@ -512,7 +462,7 @@ int OnCalculate(const int rates_total,
 
         datetime left_time = time[i];
         if (isSwingHigh) {
-            string name = MakeSwingObjectName(SwingDailyObjectPrefix, true, left_time);
+            string name = MakeSwingObjectName(SwingChartObjectPrefix, true, left_time);
             double center = high[i] + (double)InpLabelOffsetPoints * _Point;
             UpsertSwingObject(name, InpSwingHighColor, left_time, center);
             latest_chart_swing_high = high[i];
@@ -536,7 +486,7 @@ int OnCalculate(const int rates_total,
             }
         }
         if (isSwingLow) {
-            string name = MakeSwingObjectName(SwingDailyObjectPrefix, false, left_time);
+            string name = MakeSwingObjectName(SwingChartObjectPrefix, false, left_time);
             double center = low[i] - (double)InpLabelOffsetPoints * _Point;
             UpsertSwingObject(name, InpSwingLowColor, left_time, center);
             latest_chart_swing_low = low[i];
@@ -1119,29 +1069,6 @@ int OnCalculate(const int rates_total,
             }
         }
     }
-
-    SwingDirection daily_direction = current_chart_direction;
-    SwingDirection long_term_direction = DetectSwingDirection(
-        has_long_term_high_latest, has_long_term_high_prev, has_long_term_low_latest, has_long_term_low_prev,
-        long_term_high_latest, long_term_high_prev, long_term_low_latest, long_term_low_prev
-    );
-
-    UpsertDirectionStatusLabel(
-        DirectionChartLabelName,
-        DirectionChartLabelY,
-        "Chart TF Direction",
-        daily_direction,
-        clrWhite,
-        clrWhite
-    );
-    UpsertDirectionStatusLabel(
-        DirectionLongTermLabelName,
-        DirectionLongTermLabelY,
-        "LongTerm TF Direction",
-        long_term_direction,
-        clrWhite,
-        clrWhite
-    );
 
     return (rates_total);
 }

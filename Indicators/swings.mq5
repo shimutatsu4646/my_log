@@ -344,6 +344,8 @@ ENUM_TIMEFRAMES GetLongTermTimeframe(const ENUM_TIMEFRAMES chart_tf) {
             return PERIOD_H1;
         case PERIOD_M15:
             return PERIOD_H1;
+        case PERIOD_M30:
+            return PERIOD_H4;
         case PERIOD_H1:
             return PERIOD_H4;
         case PERIOD_H4:

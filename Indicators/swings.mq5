@@ -11,15 +11,15 @@
 #property indicator_plots   0
 
 //--- input parameters
-input int InputBarsToLookBack = 1000; // 過去何本まで遡るか
-input int InputSwingSpan = 3;         // 左右何本を比較対象にするか（3,4,6,10）
+input int InputBarsToLookBack = 2000; // 過去何本まで遡るか
+input int InputSwingSpan = 6;         // 左右何本を比較対象にするか（3,4,6,10）
 
 const color InpSwingHighColor = clrAqua;
 const color InpSwingLowColor = clrPink;
 const color InpLongTermSwingHighColor = clrBlue;
 const color InpLongTermSwingLowColor = clrRed;
 const int InpLabelOffsetPoints = 100;
-const int InpLongTermLabelOffsetPoints = 300;
+const int InpLongTermLabelOffsetPoints = 220;
 const int InpSwingMarkerFontSize = 8;
 const string SwingChartObjectPrefix = "SWING_BOX_CHART_";
 const string SwingLongTermObjectPrefix = "SWING_BOX_LONGTERM_";
@@ -35,6 +35,7 @@ const color ReboundLineColor = clrRed;
 const color LongTermPullbackLineColor = clrSteelBlue;
 const color LongTermReboundLineColor = clrDarkOrange;
 const int AnchorLineWidth = 3;
+const int LineShiftMultiplier = 15;
 
 enum SwingDirection {
     SWING_DIR_UNKNOWN = 0,
@@ -208,8 +209,8 @@ double GetSeparatedLongTermLinePrice(const double base_price,
                                      const double chart_ref_price,
                                      const bool place_below_chart_line,
                                      const int line_width) {
-    // 常にライン幅の50倍だけ上下へずらして表示し、チャート足ラインとの重なりを防ぐ
-    double shift = (double)(line_width * 50) * _Point;
+    // チャート足ラインとの重なりを防ぐ
+    double shift = (double)(line_width * LineShiftMultiplier) * _Point;
     return place_below_chart_line ? (base_price - shift) : (base_price + shift);
 }
 

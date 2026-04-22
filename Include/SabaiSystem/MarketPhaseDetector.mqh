@@ -202,12 +202,15 @@ public:
             return;
         }
 
-        // 上昇トレンド終了条件（doc L56）: 直近安値が直前安値を切り下げた
+        // 上昇トレンド終了条件: 直近スイング安値をローソク足実体が下抜け
         // （下降トレンド or レンジへの移行は上で既に判定済み。該当しなければ RANDOM へ）。
-        if (m_has_lower_low_ready) {
-            EndPhase(bar_time);
-            SetPhase(PHASE_RANDOM, bar_time);
-            return;
+        {
+            SwingPoint ll = swing.GetLatestLow();
+            if (ll.is_valid && bar_body_low < ll.price) {
+                EndPhase(bar_time);
+                SetPhase(PHASE_RANDOM, bar_time);
+                return;
+            }
         }
     }
 
@@ -229,12 +232,15 @@ public:
             return;
         }
 
-        // 下降トレンド終了条件（doc L61）: 直近高値が直前高値を切り上げた
+        // 下降トレンド終了条件: 直近スイング高値をローソク足実体が上抜け
         // （上昇トレンド or レンジへの移行は上で既に判定済み。該当しなければ RANDOM へ）。
-        if (m_has_higher_high_ready) {
-            EndPhase(bar_time);
-            SetPhase(PHASE_RANDOM, bar_time);
-            return;
+        {
+            SwingPoint lh = swing.GetLatestHigh();
+            if (lh.is_valid && bar_body_high > lh.price) {
+                EndPhase(bar_time);
+                SetPhase(PHASE_RANDOM, bar_time);
+                return;
+            }
         }
     }
 

@@ -6,7 +6,6 @@
 #include "ObjectHelper.mqh"
 
 #define SABAI_PHASE_PREFIX     SABAI_OBJ_PREFIX "PH_"
-#define SABAI_PHASE_VL_PREFIX  SABAI_PHASE_PREFIX "VL_"
 #define SABAI_PHASE_HL_PREFIX  SABAI_PHASE_PREFIX "HL_"
 // レンジラインの末端ラベルのフォントサイズ。(9にするとInfoPanelの文字サイズと同じになる)
 #define SABAI_RANGE_LABEL_FONT_SIZE 5
@@ -122,36 +121,6 @@ public:
         ArrayFree(m_chart_range_lines);
         m_upper_tf_line_count = 0;
         ArrayFree(m_upper_tf_lines);
-    }
-
-    void DrawUpTrendConfirmed(const datetime time) {
-        string name = SABAI_PHASE_VL_PREFIX "UTC_" + IntegerToString((long)time);
-        CObjectHelper::UpsertVLine(name, time, clrGreen, STYLE_SOLID, 1);
-    }
-
-    void DrawUpTrendEnded(const datetime time) {
-        string name = SABAI_PHASE_VL_PREFIX "UTE_" + IntegerToString((long)time);
-        CObjectHelper::UpsertVLine(name, time, clrGreen, STYLE_DOT, 1);
-    }
-
-    void DrawDownTrendConfirmed(const datetime time) {
-        string name = SABAI_PHASE_VL_PREFIX "DTC_" + IntegerToString((long)time);
-        CObjectHelper::UpsertVLine(name, time, clrRed, STYLE_SOLID, 1);
-    }
-
-    void DrawDownTrendEnded(const datetime time) {
-        string name = SABAI_PHASE_VL_PREFIX "DTE_" + IntegerToString((long)time);
-        CObjectHelper::UpsertVLine(name, time, clrRed, STYLE_DOT, 1);
-    }
-
-    void DrawRangeConfirmed(const datetime time) {
-        string name = SABAI_PHASE_VL_PREFIX "RC_" + IntegerToString((long)time);
-        CObjectHelper::UpsertVLine(name, time, clrOrange, STYLE_SOLID, 1);
-    }
-
-    void DrawRangeEnded(const datetime time) {
-        string name = SABAI_PHASE_VL_PREFIX "RE_" + IntegerToString((long)time);
-        CObjectHelper::UpsertVLine(name, time, clrOrange, STYLE_DOT, 1);
     }
 
     // レンジペアを range_idx（MarketPhaseDetector の全レンジ index）で管理する。

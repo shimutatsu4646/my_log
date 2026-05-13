@@ -269,29 +269,13 @@ int OnCalculate(const int rates_total,
             g_swing_renderer.DrawChartSwingLow(time[i], low[i]);
         }
 
-        MarketPhase current_phase = phase.GetCurrentPhase();
         color chart_color = GetTimeframeColor((ENUM_TIMEFRAMES)_Period);
 
         if (phase.HasPhaseChanged()) {
             MarketPhase old_phase = phase.GetPreviousPhase();
 
-            if (old_phase == PHASE_UP_TREND)
-                g_phase_renderer.DrawUpTrendEnded(time[i]);
-            else if (old_phase == PHASE_DOWN_TREND)
-                g_phase_renderer.DrawDownTrendEnded(time[i]);
-            else if (old_phase == PHASE_RANGE) {
-                g_phase_renderer.DrawRangeEnded(time[i]);
+            if (old_phase == PHASE_RANGE) {
                 g_phase_renderer.CloseAllChartRangeLines(time[i]);
-            }
-
-            if (current_phase == PHASE_UP_TREND) {
-                g_phase_renderer.DrawUpTrendConfirmed(time[i]);
-            }
-            else if (current_phase == PHASE_DOWN_TREND) {
-                g_phase_renderer.DrawDownTrendConfirmed(time[i]);
-            }
-            else if (current_phase == PHASE_RANGE) {
-                g_phase_renderer.DrawRangeConfirmed(time[i]);
             }
         }
 

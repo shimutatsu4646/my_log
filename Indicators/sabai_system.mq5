@@ -15,6 +15,7 @@
 #include <MyCode/SabaiSystem/Drawing/SwingRenderer.mqh>
 #include <MyCode/SabaiSystem/Drawing/PhaseRenderer.mqh>
 #include <MyCode/SabaiSystem/Drawing/BiasRenderer.mqh>
+#include <MyCode/SabaiSystem/Drawing/WaveRenderer.mqh>
 #include <MyCode/SabaiSystem/QuickBiasGaze.mqh>
 #include <MyCode/SabaiSystem/Drawing/InfoPanel.mqh>
 
@@ -26,6 +27,7 @@ CMTFAnalyzer   g_mtf;
 CSwingRenderer g_swing_renderer;
 CPhaseRenderer g_phase_renderer;
 CBiasRenderer  g_bias_renderer;
+CWaveRenderer  g_wave_renderer;
 CInfoPanel     g_info_panel;
 
 int OnInit() {
@@ -38,6 +40,7 @@ int OnInit() {
     g_swing_renderer.Init();
     g_phase_renderer.Init();
     g_bias_renderer.Init();
+    g_wave_renderer.Init();
     g_info_panel.Init();
 
     return INIT_SUCCEEDED;
@@ -234,6 +237,7 @@ int OnCalculate(const int rates_total,
     g_swing_renderer.Clear();
     g_phase_renderer.Clear();
     g_bias_renderer.Clear();
+    g_wave_renderer.Clear();
     g_info_panel.Clear();
 
     // 1) 上位足を先に全 bar 解析する（上位足 TF の描画・InfoPanel 用の状態を揃える）。
@@ -376,6 +380,19 @@ int OnCalculate(const int rates_total,
 
         g_phase_renderer.ExtendActiveLines(time[i]);
         g_bias_renderer.ExtendActiveLines(time[i]);
+
+        // 波: 検出済み Wave 全部を upsert する。
+        // - 過去 wave は frozen で内容が変わらないが、Clear() で全消去しているので
+        //   再描画のため毎バー upsert する（オブジェクト名は group_id+wave_no 一意なので idempotent）。
+        // - 最新 tracking 波は end が逐次更新されるためどのみち毎バー upsert が必要。
+        CWaveDetector *waves = chart_analyzer.GetWaves();
+        int wave_count = waves.GetWaveCount();
+        for (int w = 0; w < wave_count; w++) {
+            Wave wv;
+            if (waves.GetWave(w, wv)) {
+                g_wave_renderer.UpsertWave(wv);
+            }
+        }
     }
 
     if (InputQuickBiasBgFlag) {

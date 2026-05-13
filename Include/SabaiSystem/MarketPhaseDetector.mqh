@@ -102,13 +102,17 @@ public:
     }
 
     void UpdateReadyFlags(CSwingDetector &swing) {
+        // HL/HH/LH/LL の切り上げ・切り下げ判定はヒゲ価格 (= swing 高安そのもの) で行う。
+        // (system_doc.md L52-61 のトレンド相場定義 + L68-70 のレンジ判定基準と統一)
+        // 「実体で超えたか」のグローバルルール (system_doc.md L253) はトリガー側
+        // (bar_body_high > lh.price 等) で実装済みで、ここでは適用しない。
         if (swing.IsCurrentSwingHigh()) {
             SwingPoint latest = swing.GetLatestHigh();
             SwingPoint prev   = swing.GetPreviousHigh();
             if (latest.is_valid && prev.is_valid) {
-                m_has_higher_high_ready     = (latest.body_price >  prev.price);
-                m_has_lower_high_ready      = (latest.body_price <  prev.price);
-                m_has_non_higher_high_ready = (latest.body_price <= prev.price);
+                m_has_higher_high_ready     = (latest.price >  prev.price);
+                m_has_lower_high_ready      = (latest.price <  prev.price);
+                m_has_non_higher_high_ready = (latest.price <= prev.price);
             }
         }
 
@@ -116,9 +120,9 @@ public:
             SwingPoint latest = swing.GetLatestLow();
             SwingPoint prev   = swing.GetPreviousLow();
             if (latest.is_valid && prev.is_valid) {
-                m_has_higher_low_ready    = (latest.body_price >  prev.price);
-                m_has_lower_low_ready     = (latest.body_price <  prev.price);
-                m_has_non_lower_low_ready = (latest.body_price >= prev.price);
+                m_has_higher_low_ready    = (latest.price >  prev.price);
+                m_has_lower_low_ready     = (latest.price <  prev.price);
+                m_has_non_lower_low_ready = (latest.price >= prev.price);
             }
         }
     }

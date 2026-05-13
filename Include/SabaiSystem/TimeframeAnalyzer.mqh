@@ -7,6 +7,7 @@
 #include "QuickBiasDetector.mqh"
 #include "SlowBiasDetector.mqh"
 #include "QuickBiasGaze.mqh"
+#include "WaveDetector.mqh"
 
 class CTimeframeAnalyzer {
 private:
@@ -18,6 +19,7 @@ private:
     CQuickBiasDetector   m_quick_bias;
     CSlowBiasDetector    m_slow_bias;
     CQuickBiasGaze       m_gaze;
+    CWaveDetector        m_waves;
 
     TimeframeState       m_state;
     int                  m_bars_processed;
@@ -31,6 +33,7 @@ public:
         m_quick_bias.Init();
         m_slow_bias.Init();
         m_gaze.Init();
+        m_waves.Init();
         m_state.Reset();
         m_state.timeframe = tf;
         m_bars_processed = 0;
@@ -42,6 +45,7 @@ public:
         m_quick_bias.Reset();
         m_slow_bias.Reset();
         m_gaze.Reset();
+        m_waves.Reset();
         m_state.Reset();
         m_state.timeframe = m_timeframe;
         m_bars_processed = 0;
@@ -61,7 +65,21 @@ public:
                            open[index], high[index], low[index], close[index],
                            high, low, total);
 
+        // CWaveDetector が参照する「直近/直前スイング」は phase 判定の根拠と同じ
+        // (= m_swing.ProcessBar 後の最新状態) でなければならない。
+        // 同一バーで新規 swing 確定とトレンド確定が同時に起きるケースで重要。
+        SwingPoint snap_lh = m_swing.GetLatestHigh();
+        SwingPoint snap_ll = m_swing.GetLatestLow();
+        SwingPoint snap_ph = m_swing.GetPreviousHigh();
+        SwingPoint snap_pl = m_swing.GetPreviousLow();
+
         m_phase.ProcessBar(m_swing, bar_body_high, bar_body_low, time[index]);
+
+        m_waves.OnBar(m_swing, m_phase,
+                      snap_lh, snap_ll, snap_ph, snap_pl,
+                      high[index], low[index],
+                      bar_body_high, bar_body_low,
+                      time[index]);
 
         m_quick_bias.ProcessBar(m_swing, bar_body_high, bar_body_low,
                                 high[index], low[index], time[index]);
@@ -105,6 +123,7 @@ public:
     CQuickBiasDetector*  GetQuickBias()      { return GetPointer(m_quick_bias); }
     CSlowBiasDetector*   GetSlowBias()       { return GetPointer(m_slow_bias); }
     CQuickBiasGaze*      GetGaze()           { return GetPointer(m_gaze); }
+    CWaveDetector*       GetWaves()          { return GetPointer(m_waves); }
     ENUM_TIMEFRAMES      GetTimeframe()      { return m_timeframe; }
     int                  GetSwingSpan()      { return m_swing_span; }
     int                  GetBarsProcessed()  { return m_bars_processed; }
